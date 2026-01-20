@@ -1,13 +1,12 @@
 import { Mapped, OptionalKeys, RequiredKeys } from '../utils/types';
-import { users as User, Prisma } from '@prisma/client';
+import { users as User } from '@prisma/client';
 import prisma from '../services/prisma';
 import hidash from '../utils/hidash';
-
 
 const model = prisma.users;
 
 export type Required = Omit<RequiredKeys<User>, 'id' | 'created_at' | 'modified_at' | 'active'>;
-export type Optional = Partial<Omit<OptionalKeys<User>, 'premiere_id'>>;
+export type Optional = Partial<OptionalKeys<User>>;
 export type Create = Mapped<Required & Optional>;
 
 export function getRequired() {
@@ -15,7 +14,6 @@ export function getRequired() {
         username: '',
         password: '',
         salt: '',
-        role: 'SUPERADMIN',
     };
     return Object.keys(required);
 }
@@ -25,7 +23,6 @@ export function formatCreate(data: any) {
         username: data.username,
         password: data.password,
         salt: data.salt,
-        role: data.role,
     };
 
     hidash.clean(formatted);
@@ -46,7 +43,13 @@ export async function getById(id: User['id']) {
 
 export async function getAll() {
     return await model.findMany({
-        where: { active: true }, 
+        where: { active: true },
+        orderBy: { created_at: 'desc' }
+    });
+}
+
+export async function getAllWithInactive() {
+    return await model.findMany({
         orderBy: { created_at: 'desc' }
     });
 }
@@ -82,12 +85,10 @@ export async function softDelete(id: User['id']) {
     });
 }
 
-// Get user including inactive (for internal use)
 export async function getByIdIncludeInactive(id: User['id']) {
     return await model.findUnique({ where: { id } });
 }
 
-// Restore user
 export async function restoreUser(id: User['id']) {
     return await model.update({
         where: { id },
