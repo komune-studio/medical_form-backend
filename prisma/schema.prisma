@@ -18,3 +18,27 @@ model users {
 
   @@index([username], map: "idx_users_username")
 }
+
+model visitors {
+  id                    Int                      @id @default(autoincrement()) @db.UnsignedInt
+  visitor_name          String                   @db.VarChar(255)
+  phone_number          String                   @db.VarChar(20)
+  visitor_profile       visitors_visitor_profile
+  visitor_profile_other String?                  @db.VarChar(255)
+  filled_by             String                   @db.VarChar(255)
+  checked_out_at        DateTime?                @db.DateTime(0)
+  created_at            DateTime?                @default(now()) @db.DateTime(0)
+  modified_at           DateTime?                @default(now()) @db.DateTime(0)
+
+  @@index([checked_out_at], map: "idx_checked_out_at")
+  @@index([created_at], map: "idx_created_at")
+  @@index([filled_by], map: "idx_filled_by")
+  @@index([phone_number], map: "idx_phone_number")
+  @@index([visitor_profile], map: "idx_visitor_profile")
+}
+
+enum visitors_visitor_profile {
+  Player
+  Visitor
+  Other
+}
