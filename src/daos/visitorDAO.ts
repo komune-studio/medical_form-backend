@@ -28,6 +28,7 @@ export interface GetAllOptions {
     dateTo?: Date;
     visitorProfile?: Visitor['visitor_profile'];
     search?: string;
+    timeRange?: string; // New: for time range filter
 }
 
 export interface VisitorStats {
@@ -82,18 +83,15 @@ export async function getById(id: Visitor['id']): Promise<Visitor | null> {
 export async function getAll(options?: GetAllOptions): Promise<Visitor[]> {
     const where: any = {};
 
+    // Handle date range - support both old way and new timeRange
     if (options?.dateFrom && options?.dateTo) {
         where.created_at = {
             gte: options.dateFrom,
             lte: options.dateTo
         };
-    }
-
-    if (options?.dateFrom && !options.dateTo) {
+    } else if (options?.dateFrom && !options.dateTo) {
         where.created_at = { gte: options.dateFrom };
-    }
-
-    if (options?.dateTo && !options.dateFrom) {
+    } else if (options?.dateTo && !options.dateFrom) {
         where.created_at = { lte: options.dateTo };
     }
 
@@ -102,7 +100,6 @@ export async function getAll(options?: GetAllOptions): Promise<Visitor[]> {
     }
 
     if (options?.search) {
-        // Untuk MySQL, ga perlu mode: 'insensitive' karena defaultnya case-insensitive
         where.OR = [
             { visitor_name: { contains: options.search } },
             { phone_number: { contains: options.search } },

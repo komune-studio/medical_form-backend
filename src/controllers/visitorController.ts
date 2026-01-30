@@ -8,7 +8,7 @@ import {
 } from '../errors/RequestErrorCollection';
 import * as VisitorDAO from '../daos/visitorDAO';
 import hidash from '../utils/hidash';
-import { visitors as Visitor } from '@prisma/client'; // Import dari prisma client
+import { visitors as Visitor } from '@prisma/client';
 
 export async function createVisitor(req: Request, res: Response, next: NextFunction): Promise<void | Response> {
     try {
@@ -74,7 +74,8 @@ export async function getAllVisitors(req: Request, res: Response, next: NextFunc
             dateFrom,
             dateTo,
             visitorProfile,
-            search
+            search,
+            timeRange // New parameter for time range filter
         } = req.query;
 
         const options: VisitorDAO.GetAllOptions = {};
@@ -83,16 +84,59 @@ export async function getAllVisitors(req: Request, res: Response, next: NextFunc
             options.includeCheckedOut = includeCheckedOut === 'true';
         }
 
-        if (dateFrom) {
-            options.dateFrom = new Date(dateFrom as string);
-        }
+        // Handle time range filter
+        if (timeRange) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0); // Start of today
 
-        if (dateTo) {
-            options.dateTo = new Date(dateTo as string);
+            switch (timeRange) {
+                case 'today':
+                    const tomorrow = new Date(today);
+                    tomorrow.setDate(tomorrow.getDate() + 1);
+                    options.dateFrom = today;
+                    options.dateTo = tomorrow;
+                    break;
+                    
+                case 'last7days':
+                    const last7Days = new Date(today);
+                    last7Days.setDate(last7Days.getDate() - 7);
+                    options.dateFrom = last7Days;
+                    options.dateTo = new Date(); // Now
+                    break;
+                    
+                case 'last30days':
+                    const last30Days = new Date(today);
+                    last30Days.setDate(last30Days.getDate() - 30);
+                    options.dateFrom = last30Days;
+                    options.dateTo = new Date(); // Now
+                    break;
+                    
+                case 'custom':
+                    // For custom range, use dateFrom and dateTo
+                    if (dateFrom) {
+                        options.dateFrom = new Date(dateFrom as string);
+                    }
+                    if (dateTo) {
+                        options.dateTo = new Date(dateTo as string);
+                    }
+                    break;
+                    
+                default:
+                    // No time range selected, get all data
+                    break;
+            }
+        } else {
+            // Handle old way for backward compatibility
+            if (dateFrom) {
+                options.dateFrom = new Date(dateFrom as string);
+            }
+
+            if (dateTo) {
+                options.dateTo = new Date(dateTo as string);
+            }
         }
 
         if (visitorProfile && ['Player', 'Visitor', 'Other'].includes(visitorProfile as string)) {
-            // Gunakan type langsung dari @prisma/client
             options.visitorProfile = visitorProfile as Visitor['visitor_profile'];
         }
 
@@ -205,13 +249,59 @@ export async function deleteVisitor(req: Request, res: Response, next: NextFunct
 
 export async function getVisitorStats(req: Request, res: Response, next: NextFunction): Promise<void | Response> {
     try {
-        const { dateFrom, dateTo } = req.query;
+        const { dateFrom, dateTo, timeRange } = req.query;
 
-        const stats = await VisitorDAO.getStats(
-            dateFrom ? new Date(dateFrom as string) : undefined,
-            dateTo ? new Date(dateTo as string) : undefined
-        );
+        let startDate: Date | undefined;
+        let endDate: Date | undefined;
 
+        // Handle time range filter for stats
+        if (timeRange) {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0); // Start of today
+
+            switch (timeRange) {
+                case 'today':
+                    const tomorrow = new Date(today);
+                    tomorrow.setDate(tomorrow.getDate() + 1);
+                    startDate = today;
+                    endDate = tomorrow;
+                    break;
+                    
+                case 'last7days':
+                    const last7Days = new Date(today);
+                    last7Days.setDate(last7Days.getDate() - 7);
+                    startDate = last7Days;
+                    endDate = new Date(); // Now
+                    break;
+                    
+                case 'last30days':
+                    const last30Days = new Date(today);
+                    last30Days.setDate(last30Days.getDate() - 30);
+                    startDate = last30Days;
+                    endDate = new Date(); // Now
+                    break;
+                    
+                case 'custom':
+                    // For custom range, use dateFrom and dateTo
+                    if (dateFrom) {
+                        startDate = new Date(dateFrom as string);
+                    }
+                    if (dateTo) {
+                        endDate = new Date(dateTo as string);
+                    }
+                    break;
+            }
+        } else {
+            // Fallback to old parameters
+            if (dateFrom) {
+                startDate = new Date(dateFrom as string);
+            }
+            if (dateTo) {
+                endDate = new Date(dateTo as string);
+            }
+        }
+
+        const stats = await VisitorDAO.getStats(startDate, endDate);
         res.send(stats);
     } catch (error: any) {
         next(new InternalServerError(error));
@@ -230,8 +320,6 @@ export async function getVisitorByPhone(req: Request, res: Response, next: NextF
         const visitor = await VisitorDAO.getByPhoneNumber(phone as string);
         
         if (!visitor) {
-            // Fix: Use BadRequestError or create a custom message
-            // instead of EntityNotFoundError which expects a numeric ID
             next(new BadRequestError(`Visitor with phone number ${phone} not found`));
             return;
         }
