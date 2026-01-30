@@ -7,6 +7,7 @@ import {
     MissingBodyError,
 } from '../errors/RequestErrorCollection';
 import * as VisitorDAO from '../daos/visitorDAO';
+import * as StaffDAO from '../daos/staffDAO'; // Tambahkan import staffDAO
 import hidash from '../utils/hidash';
 import { visitors as Visitor } from '@prisma/client';
 
@@ -37,6 +38,13 @@ export async function createVisitor(req: Request, res: Response, next: NextFunct
         const phoneRegex = /^[0-9+()-]+$/;
         if (!phoneRegex.test(body.phone_number)) {
             next(new BadRequestError('Invalid phone number format'));
+            return;
+        }
+
+        // VALIDASI STAFF_ID ADA DAN ACTIVE
+        const isValidStaff = await VisitorDAO.validateStaff(body.staff_id);
+        if (!isValidStaff) {
+            next(new BadRequestError(`Staff with ID ${body.staff_id} not found or inactive`));
             return;
         }
 
@@ -184,6 +192,15 @@ export async function updateVisitor(req: Request, res: Response, next: NextFunct
             const phoneRegex = /^[0-9+()-]+$/;
             if (!phoneRegex.test(body.phone_number)) {
                 next(new BadRequestError('Invalid phone number format'));
+                return;
+            }
+        }
+
+        // VALIDASI STAFF_ID JIKA DIUPDATE
+        if (body.staff_id) {
+            const isValidStaff = await VisitorDAO.validateStaff(body.staff_id);
+            if (!isValidStaff) {
+                next(new BadRequestError(`Staff with ID ${body.staff_id} not found or inactive`));
                 return;
             }
         }
@@ -357,6 +374,49 @@ export async function getRecentActiveVisitors(req: Request, res: Response, next:
             limit ? parseInt(limit as string) : 10
         );
         res.send(visitors);
+    } catch (error: any) {
+        next(new InternalServerError(error));
+    }
+}
+
+// TAMBAHAN: Function untuk mendapatkan daftar staff untuk dropdown
+export async function getStaffForDropdown(req: Request, res: Response, next: NextFunction): Promise<void | Response> {
+    try {
+        const staff = await StaffDAO.getActiveStaff();
+        res.send(staff);
+    } catch (error: any) {
+        next(new InternalServerError(error));
+    }
+}
+
+// TAMBAHAN: Validasi nama staff sebelum create/update visitor
+export async function validateStaffName(req: Request, res: Response, next: NextFunction): Promise<void | Response> {
+    try {
+        const { name } = req.query;
+        
+        if (!name) {
+            next(new BadRequestError('Staff name is required'));
+            return;
+        }
+
+        const staff = await StaffDAO.getStaffByName(name as string);
+        
+        if (!staff) {
+            res.send({ 
+                valid: false, 
+                message: `Staff "${name}" not found or inactive` 
+            });
+            return;
+        }
+
+        res.send({ 
+            valid: true, 
+            staff: {
+                id: staff.id,
+                name: staff.name,
+                phone_number: staff.phone_number
+            }
+        });
     } catch (error: any) {
         next(new InternalServerError(error));
     }

@@ -7,6 +7,7 @@ import errorMiddleware from './middlewares/errorMiddleware';
 import userRoutes from './routes/v1/userRoutes'; 
 import uploadRoutes from './routes/v1/uploadRoutes';
 import visitorRoutes from './routes/v1/visitorRoutes';
+import staffRoutes from "./routes/v1/staffRoutes";
 
 const app: Express = express();
 
@@ -24,6 +25,7 @@ app.use('/uploads', express.static('uploads/'));
 app.use('/v1/user', userRoutes);
 app.use('/v1/upload', uploadRoutes);
 app.use('/v1/visitor', visitorRoutes);
+app.use('/v1/staff', staffRoutes);
 app.use(errorMiddleware);
 
 async function main() {
