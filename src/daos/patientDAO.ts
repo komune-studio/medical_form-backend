@@ -126,6 +126,31 @@ export function formatCreate(data: any): Prisma.patientCreateInput {
 }
 
 export async function create(data: Prisma.patientCreateInput): Promise<any> {
+    // Auto generate patient code jika kosong
+    if (!data.patient_code || data.patient_code.trim() === '') {
+        // Cari patient dengan ID terbesar
+        const lastPatient = await prisma.patient.findFirst({
+            orderBy: { id: 'desc' },
+            select: { id: true, patient_code: true }
+        });
+        
+        let nextNumber = 1;
+        
+        if (lastPatient?.patient_code) {
+            // Extract number dari patient_code yang ada
+            const matches = lastPatient.patient_code.match(/PAT-(\d+)/);
+            if (matches && matches[1]) {
+                nextNumber = parseInt(matches[1]) + 1;
+            } else {
+                nextNumber = lastPatient.id + 1;
+            }
+        } else if (lastPatient?.id) {
+            nextNumber = lastPatient.id + 1;
+        }
+        
+        data.patient_code = `PAT-${nextNumber.toString().padStart(6, '0')}`;
+    }
+
     const result = await model.create({ 
         data,
         include: {
