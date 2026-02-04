@@ -7,7 +7,7 @@ const model = prisma.patient;
 export interface CreatePatientData {
     name: string;
     gender: Prisma.patientCreateInput['gender'];
-    patient_code?: string; // Optional untuk input
+    patient_code?: string;
     date_of_birth?: Date | null;
     phone?: string | null;
     email?: string | null;
@@ -21,7 +21,7 @@ export interface CreatePatientData {
 export interface UpdatePatientData {
     name?: string;
     gender?: Prisma.patientCreateInput['gender'];
-    patient_code?: string; // String only, tidak null
+    patient_code?: string;
     date_of_birth?: Date | null;
     phone?: string | null;
     email?: string | null;
@@ -42,11 +42,21 @@ export interface GetAllOptions {
     offset?: number;
 }
 
-// Format rapi untuk tabel/grid display
+// Helper untuk generate next patient code: PAT-1, PAT-2, etc
+async function generateNextPatientCode(): Promise<string> {
+    // Simple: selalu gunakan ID + 1
+    const lastPatient = await prisma.patient.findFirst({
+        orderBy: { id: 'desc' },
+        select: { id: true }
+    });
+    
+    const nextId = (lastPatient?.id || 0) + 1;
+    return `PAT-${nextId}`;
+}
+
 export function formatPatientForTable(patient: any) {
     if (!patient) return null;
     
-    // Hitung usia dari date_of_birth
     let age = null;
     if (patient.date_of_birth) {
         const birthDate = new Date(patient.date_of_birth);
@@ -100,17 +110,10 @@ export function getRequired(): Array<keyof CreatePatientData> {
 }
 
 export function formatCreate(data: any): Prisma.patientCreateInput {
-    // Generate patient code jika tidak ada
-    let patientCode = data.patient_code;
-    if (!patientCode || patientCode.trim() === '') {
-        // Temporary code untuk memenuhi Prisma requirements
-        patientCode = `TEMP-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
-    }
-
     const formatted: Prisma.patientCreateInput = {
         name: data.name,
         gender: data.gender,
-        patient_code: patientCode
+        patient_code: data.patient_code || '' // Biarkan kosong
     };
 
     // Optional fields
@@ -127,32 +130,9 @@ export function formatCreate(data: any): Prisma.patientCreateInput {
 }
 
 export async function create(data: Prisma.patientCreateInput): Promise<any> {
-    // Check if patient_code exists and is a TEMP code
-    if (data.patient_code && data.patient_code.includes('TEMP-')) {
-        // Cari patient dengan ID terbesar
-        const lastPatient = await prisma.patient.findFirst({
-            orderBy: { id: 'desc' },
-            select: { id: true, patient_code: true }
-        });
-        
-        let nextNumber = 1;
-        
-        if (lastPatient?.patient_code && !lastPatient.patient_code.includes('TEMP-')) {
-            // Extract number dari patient_code yang ada (format: PAT-000001)
-            const matches = lastPatient.patient_code.match(/PAT-(\d+)/);
-            if (matches && matches[1]) {
-                const lastNumber = parseInt(matches[1]);
-                nextNumber = lastNumber + 1;
-            } else {
-                // Jika format tidak sesuai, gunakan ID + 1
-                nextNumber = lastPatient.id + 1;
-            }
-        } else if (lastPatient?.id) {
-            // Jika ada ID tapi patient_code adalah TEMP
-            nextNumber = lastPatient.id + 1;
-        }
-        
-        data.patient_code = `PAT-${nextNumber.toString().padStart(6, '0')}`;
+    // Generate patient code jika kosong
+    if (!data.patient_code || data.patient_code.trim() === '') {
+        data.patient_code = await generateNextPatientCode();
     }
 
     const result = await model.create({ 
@@ -163,6 +143,8 @@ export async function create(data: Prisma.patientCreateInput): Promise<any> {
     });
     return formatPatientForTable(result);
 }
+
+// ... (sisanya tetap sama dari code sebelumnya) ...
 
 export async function getById(id: number): Promise<any | null> {
     const result = await model.findUnique({ 
@@ -215,7 +197,6 @@ export async function getAll(options?: GetAllOptions): Promise<any[]> {
         };
     }
 
-    // Build query options
     const queryOptions: any = {
         where,
         include: {
@@ -227,7 +208,6 @@ export async function getAll(options?: GetAllOptions): Promise<any[]> {
         ]
     };
 
-    // Pagination
     if (options?.limit) {
         queryOptions.take = options.limit;
     }
@@ -236,8 +216,6 @@ export async function getAll(options?: GetAllOptions): Promise<any[]> {
     }
 
     const results = await model.findMany(queryOptions);
-    
-    // Format rapi buat tabel
     return results.map(formatPatientForTable);
 }
 
@@ -246,14 +224,12 @@ export async function update(id: number, data: UpdatePatientData): Promise<any> 
         updated_at: new Date()
     };
 
-    // Add fields only if they are provided
     if (data.name !== undefined) updateData.name = data.name;
     if (data.gender !== undefined) updateData.gender = data.gender;
-    if (data.patient_code !== undefined && data.patient_code !== null) {
+    if (data.patient_code !== undefined && data.patient_code.trim() !== '') {
         updateData.patient_code = data.patient_code;
     }
     
-    // Handle date_of_birth conversion
     if (data.date_of_birth !== undefined) {
         updateData.date_of_birth = data.date_of_birth ? new Date(data.date_of_birth) : null;
     }
@@ -396,7 +372,6 @@ export async function getPatientsByDoctor(created_by: number): Promise<any[]> {
     return results.map(formatPatientForTable);
 }
 
-// Validasi email unik
 export async function validateEmailUnique(email: string, excludeId?: number): Promise<boolean> {
     const where: Prisma.patientWhereInput = { email };
     
@@ -408,7 +383,6 @@ export async function validateEmailUnique(email: string, excludeId?: number): Pr
     return !existing;
 }
 
-// Validasi phone unik
 export async function validatePhoneUnique(phone: string, excludeId?: number): Promise<boolean> {
     const where: Prisma.patientWhereInput = { phone };
     
@@ -420,9 +394,7 @@ export async function validatePhoneUnique(phone: string, excludeId?: number): Pr
     return !existing;
 }
 
-// Validasi patient code unik
 export async function validatePatientCodeUnique(patient_code: string, excludeId?: number): Promise<boolean> {
-    // Jika patient_code kosong, itu valid (akan di-generate otomatis)
     if (!patient_code || patient_code.trim() === '') {
         return true;
     }
