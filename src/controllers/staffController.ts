@@ -238,10 +238,20 @@ export async function getStaffByPhone(req: Request, res: Response, next: NextFun
             return;
         }
 
+        console.log('Searching staff with phone:', phone); // DEBUG
+        
         const staff = await StaffDAO.getStaffByPhone(phone as string);
         
+        console.log('Found staff:', staff); // DEBUG
+        
         if (!staff) {
-            res.send(null);
+            // Coba format lain
+            const staffWithPlus = await StaffDAO.getStaffByPhone(`+${phone}`);
+            if (staffWithPlus) {
+                return res.send(staffWithPlus);
+            }
+            
+            next(new EntityNotFoundError('Staff with phone', phone as string));
             return;
         }
 
