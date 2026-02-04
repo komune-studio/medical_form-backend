@@ -7,6 +7,7 @@ import {
     MissingBodyError,
 } from '../errors/RequestErrorCollection';
 import * as StaffDAO from '../daos/staffDAO';
+import * as UserDAO from '../daos/userDAO'; // Tambahkan ini
 import hidash from '../utils/hidash';
 
 export async function createStaff(req: Request, res: Response, next: NextFunction): Promise<void | Response> {
@@ -23,11 +24,36 @@ export async function createStaff(req: Request, res: Response, next: NextFunctio
             return;
         }
 
-        // Validate phone number format
-        const phoneRegex = /^[0-9+()-]+$/;
-        if (!phoneRegex.test(body.phone_number)) {
-            next(new BadRequestError('Invalid phone number format'));
+        // Validasi user_id ada
+        const user = await UserDAO.getById(body.user_id);
+        if (!user) {
+            next(new BadRequestError(`User with ID ${body.user_id} not found`));
             return;
+        }
+
+        // Cek apakah user sudah memiliki staff
+        const existingStaff = await StaffDAO.getByUserId(body.user_id);
+        if (existingStaff) {
+            next(new BadRequestError(`User already has a staff profile`));
+            return;
+        }
+
+        // Validate email format jika ada
+        if (body.email) {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(body.email)) {
+                next(new BadRequestError('Invalid email format'));
+                return;
+            }
+        }
+
+        // Validate phone number format jika ada
+        if (body.phone_number) {
+            const phoneRegex = /^[0-9+()-]+$/;
+            if (!phoneRegex.test(body.phone_number)) {
+                next(new BadRequestError('Invalid phone number format'));
+                return;
+            }
         }
 
         const result = await StaffDAO.create(StaffDAO.formatCreate(body));
@@ -99,7 +125,16 @@ export async function updateStaff(req: Request, res: Response, next: NextFunctio
             return;
         }
 
-        // Validate phone number if provided
+        // Validate email jika provided
+        if (body.email) {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(body.email)) {
+                next(new BadRequestError('Invalid email format'));
+                return;
+            }
+        }
+
+        // Validate phone number jika provided
         if (body.phone_number) {
             const phoneRegex = /^[0-9+()-]+$/;
             if (!phoneRegex.test(body.phone_number)) {

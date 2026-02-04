@@ -5,14 +5,17 @@ import hidash from '../utils/hidash';
 const model = prisma.staff;
 
 export interface CreateStaffData {
+    user_id: number;  // Wajib ada karena relasi ke users
     name: string;
-    phone_number: string;
+    email?: string | null;
+    phone_number?: string | null;
     active?: boolean;
 }
 
 export interface UpdateStaffData {
     name?: string;
-    phone_number?: string;
+    email?: string | null;
+    phone_number?: string | null;
     active?: boolean;
 }
 
@@ -23,16 +26,18 @@ export interface GetAllStaffOptions {
 
 export function getRequired(): Array<keyof CreateStaffData> {
     const required: Array<keyof CreateStaffData> = [
-        'name',
-        'phone_number'
+        'user_id',
+        'name'
     ];
     return required;
 }
 
 export function formatCreate(data: any): CreateStaffData {
     const formatted: CreateStaffData = {
+        user_id: data.user_id,
         name: data.name,
-        phone_number: data.phone_number,
+        email: data.email || null,
+        phone_number: data.phone_number || null,
         active: data.active !== undefined ? data.active : true
     };
 
@@ -41,11 +46,23 @@ export function formatCreate(data: any): CreateStaffData {
 }
 
 export async function create(data: CreateStaffData): Promise<Staff> {
-    return await model.create({ data });
+    return await model.create({ 
+        data: {
+            user_id: data.user_id,
+            name: data.name,
+            email: data.email,
+            phone_number: data.phone_number,
+            active: data.active !== undefined ? data.active : true
+        }
+    });
 }
-
 export async function getById(id: Staff['id']): Promise<Staff | null> {
-    return await model.findUnique({ where: { id } });
+    return await model.findUnique({ 
+        where: { id },
+        include: {
+            users: true  // Include user data
+        }
+    });
 }
 
 export async function getAll(options?: GetAllStaffOptions): Promise<Staff[]> {
@@ -58,12 +75,16 @@ export async function getAll(options?: GetAllStaffOptions): Promise<Staff[]> {
     if (options?.search) {
         where.OR = [
             { name: { contains: options.search } },
+            { email: { contains: options.search } },
             { phone_number: { contains: options.search } }
         ];
     }
 
     return await model.findMany({
         where,
+        include: {
+            users: true
+        },
         orderBy: { name: 'asc' }
     });
 }
@@ -73,7 +94,7 @@ export async function update(id: Staff['id'], data: UpdateStaffData): Promise<St
         where: { id },
         data: {
             ...data,
-            modified_at: new Date()
+            modified_at: new Date()  // Ini akan di-set otomatis oleh database
         }
     });
 }
@@ -91,6 +112,9 @@ export async function softDelete(id: Staff['id']): Promise<Staff> {
 export async function getActiveStaff(): Promise<Staff[]> {
     return await model.findMany({
         where: { active: true },
+        include: {
+            users: true
+        },
         orderBy: { name: 'asc' }
     });
 }
@@ -101,8 +125,12 @@ export async function searchStaff(searchTerm: string): Promise<Staff[]> {
             active: true,
             OR: [
                 { name: { contains: searchTerm } },
+                { email: { contains: searchTerm } },
                 { phone_number: { contains: searchTerm } }
             ]
+        },
+        include: {
+            users: true
         },
         orderBy: { name: 'asc' },
         take: 20
@@ -114,6 +142,19 @@ export async function getStaffByName(name: string): Promise<Staff | null> {
         where: {
             name,
             active: true
+        },
+        include: {
+            users: true
+        }
+    });
+}
+
+// Fungsi baru untuk mendapatkan staff by user_id
+export async function getByUserId(user_id: number): Promise<Staff | null> {
+    return await model.findFirst({
+        where: { user_id },
+        include: {
+            users: true
         }
     });
 }

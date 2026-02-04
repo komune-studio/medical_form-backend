@@ -6,8 +6,8 @@ import prisma from './services/prisma';
 import errorMiddleware from './middlewares/errorMiddleware';
 import userRoutes from './routes/v1/userRoutes'; 
 import uploadRoutes from './routes/v1/uploadRoutes';
-import visitorRoutes from './routes/v1/visitorRoutes';
 import staffRoutes from "./routes/v1/staffRoutes";
+import patientRoutes from "./routes/v1/patientRoutes";
 
 const app: Express = express();
 
@@ -24,8 +24,8 @@ app.use('/uploads', express.static('uploads/'));
 // Hanya menyisakan rute-rute yang diperlukan
 app.use('/v1/user', userRoutes);
 app.use('/v1/upload', uploadRoutes);
-app.use('/v1/visitor', visitorRoutes);
 app.use('/v1/staff', staffRoutes);
+app.use('/v1/patient', patientRoutes);
 app.use(errorMiddleware);
 
 async function main() {

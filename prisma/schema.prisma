@@ -15,45 +15,54 @@ model users {
   active      Boolean?  @default(true)
   created_at  DateTime? @default(now()) @db.Timestamp(0)
   modified_at DateTime? @db.Timestamp(0)
+  patient     patient[]
+  staff       staff[]
 
   @@index([username], map: "idx_users_username")
 }
 
-model visitors {
-  id                    Int                      @id @default(autoincrement()) @db.UnsignedInt
-  visitor_name          String                   @db.VarChar(255)
-  phone_number          String                   @db.VarChar(20)
-  visitor_profile       visitors_visitor_profile
-  visitor_profile_other String?                  @db.VarChar(255)
-  staff_id              Int?                     @db.UnsignedInt
-  checked_out_at        DateTime?                @db.DateTime(0)
-  created_at            DateTime?                @default(now()) @db.DateTime(0)
-  modified_at           DateTime?                @default(now()) @db.DateTime(0)
-  staff                 staff?                   @relation(fields: [staff_id], references: [id], map: "fk_visitors_staff")
-
-  @@index([checked_out_at], map: "idx_checked_out_at")
-  @@index([created_at], map: "idx_created_at")
-  @@index([phone_number], map: "idx_phone_number")
-  @@index([visitor_profile], map: "idx_visitor_profile")
-  @@index([staff_id], map: "idx_staff_id")
-}
-
 model staff {
-  id           Int        @id @default(autoincrement()) @db.UnsignedInt
-  name         String     @db.VarChar(255)
-  phone_number String     @db.VarChar(20)
-  active       Boolean?   @default(true)
-  created_at   DateTime?  @default(now()) @db.DateTime(0)
-  modified_at  DateTime?  @default(now()) @db.DateTime(0)
-  visitors     visitors[]
+  id           Int       @id @default(autoincrement())
+  user_id      Int
+  name         String    @db.VarChar(100)
+  email        String?   @db.VarChar(100)
+  phone_number String?   @db.VarChar(20)
+  active       Boolean?  @default(true)
+  created_at   DateTime? @default(now()) @db.Timestamp(0)
+  modified_at  DateTime? @db.Timestamp(0)
+  users        users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_staff_user")
 
-  @@index([active], map: "idx_active")
-  @@index([name], map: "idx_name")
-  @@index([phone_number], map: "idx_phone_number")
+  @@index([user_id], map: "fk_staff_user")
 }
 
-enum visitors_visitor_profile {
-  Player
-  Visitor
-  Other
+model patient {
+  id            Int                 @id @default(autoincrement())
+  patient_code  String?             @unique(map: "patient_code") @db.VarChar(50)
+  name          String              @db.VarChar(150)
+  gender        patient_gender
+  date_of_birth DateTime?           @db.Date
+  phone         String?             @db.VarChar(20)
+  email         String?             @db.VarChar(100)
+  address       String?             @db.Text
+  blood_type    patient_blood_type?
+  allergies     String?             @db.Text
+  medical_notes String?             @db.Text
+  created_by    Int?
+  created_at    DateTime?           @default(now()) @db.Timestamp(0)
+  updated_at    DateTime?           @default(now()) @db.Timestamp(0)
+  users         users?              @relation(fields: [created_by], references: [id], onUpdate: NoAction, map: "fk_patient_created_by")
+
+  @@index([created_by], map: "fk_patient_created_by")
+}
+
+enum patient_gender {
+  MALE
+  FEMALE
+}
+
+enum patient_blood_type {
+  A
+  B
+  AB
+  O
 }
