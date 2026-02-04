@@ -31,7 +31,7 @@ model staff {
 
 model patient {
   id            Int                 @id @default(autoincrement())
-  patient_code  String?             @unique(map: "patient_code") @db.VarChar(50)
+  patient_code  String              @unique(map: "patient_code") @db.VarChar(50)
   name          String              @db.VarChar(150)
   gender        patient_gender
   date_of_birth DateTime?           @db.Date
