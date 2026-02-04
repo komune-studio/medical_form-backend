@@ -7,7 +7,7 @@ const model = prisma.patient;
 export interface CreatePatientData {
     name: string;
     gender: Prisma.patientCreateInput['gender'];
-    patient_code?: string | null;
+    patient_code?: string; // Optional untuk input
     date_of_birth?: Date | null;
     phone?: string | null;
     email?: string | null;
@@ -21,7 +21,7 @@ export interface CreatePatientData {
 export interface UpdatePatientData {
     name?: string;
     gender?: Prisma.patientCreateInput['gender'];
-    patient_code?: string | null;
+    patient_code?: string; // String only, tidak null
     date_of_birth?: Date | null;
     phone?: string | null;
     email?: string | null;
@@ -100,17 +100,18 @@ export function getRequired(): Array<keyof CreatePatientData> {
 }
 
 export function formatCreate(data: any): Prisma.patientCreateInput {
+    // Generate patient code jika tidak ada
+    let patientCode = data.patient_code;
+    if (!patientCode || patientCode.trim() === '') {
+        // Temporary code untuk memenuhi Prisma requirements
+        patientCode = `TEMP-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+    }
+
     const formatted: Prisma.patientCreateInput = {
         name: data.name,
-        gender: data.gender
+        gender: data.gender,
+        patient_code: patientCode
     };
-
-    // Hanya set patient_code jika disediakan dan tidak kosong
-    if (data.patient_code && data.patient_code.trim() !== '') {
-        formatted.patient_code = data.patient_code;
-    }
-    // Jika tidak ada patient_code, biarkan undefined
-    // nanti akan di-generate otomatis di function create()
 
     // Optional fields
     if (data.date_of_birth) formatted.date_of_birth = new Date(data.date_of_birth);
@@ -126,8 +127,8 @@ export function formatCreate(data: any): Prisma.patientCreateInput {
 }
 
 export async function create(data: Prisma.patientCreateInput): Promise<any> {
-    // Auto generate patient code jika kosong
-    if (!data.patient_code || data.patient_code.trim() === '') {
+    // Check if patient_code exists and is a TEMP code
+    if (data.patient_code && data.patient_code.includes('TEMP-')) {
         // Cari patient dengan ID terbesar
         const lastPatient = await prisma.patient.findFirst({
             orderBy: { id: 'desc' },
@@ -136,7 +137,7 @@ export async function create(data: Prisma.patientCreateInput): Promise<any> {
         
         let nextNumber = 1;
         
-        if (lastPatient?.patient_code) {
+        if (lastPatient?.patient_code && !lastPatient.patient_code.includes('TEMP-')) {
             // Extract number dari patient_code yang ada (format: PAT-000001)
             const matches = lastPatient.patient_code.match(/PAT-(\d+)/);
             if (matches && matches[1]) {
@@ -147,10 +148,9 @@ export async function create(data: Prisma.patientCreateInput): Promise<any> {
                 nextNumber = lastPatient.id + 1;
             }
         } else if (lastPatient?.id) {
-            // Jika ada ID tapi tidak ada patient_code
+            // Jika ada ID tapi patient_code adalah TEMP
             nextNumber = lastPatient.id + 1;
         }
-        // Jika tidak ada patient sama sekali, nextNumber tetap 1
         
         data.patient_code = `PAT-${nextNumber.toString().padStart(6, '0')}`;
     }
@@ -243,14 +243,27 @@ export async function getAll(options?: GetAllOptions): Promise<any[]> {
 
 export async function update(id: number, data: UpdatePatientData): Promise<any> {
     const updateData: Prisma.patientUpdateInput = {
-        ...data,
         updated_at: new Date()
     };
 
+    // Add fields only if they are provided
+    if (data.name !== undefined) updateData.name = data.name;
+    if (data.gender !== undefined) updateData.gender = data.gender;
+    if (data.patient_code !== undefined && data.patient_code !== null) {
+        updateData.patient_code = data.patient_code;
+    }
+    
     // Handle date_of_birth conversion
     if (data.date_of_birth !== undefined) {
         updateData.date_of_birth = data.date_of_birth ? new Date(data.date_of_birth) : null;
     }
+    
+    if (data.phone !== undefined) updateData.phone = data.phone;
+    if (data.email !== undefined) updateData.email = data.email;
+    if (data.address !== undefined) updateData.address = data.address;
+    if (data.blood_type !== undefined) updateData.blood_type = data.blood_type;
+    if (data.allergies !== undefined) updateData.allergies = data.allergies;
+    if (data.medical_notes !== undefined) updateData.medical_notes = data.medical_notes;
 
     const result = await model.update({
         where: { id },
