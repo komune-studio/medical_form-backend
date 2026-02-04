@@ -7,7 +7,6 @@ import {
     MissingBodyError,
 } from '../errors/RequestErrorCollection';
 import * as StaffDAO from '../daos/staffDAO';
-import * as UserDAO from '../daos/userDAO'; // Tambahkan ini
 import hidash from '../utils/hidash';
 
 export async function createStaff(req: Request, res: Response, next: NextFunction): Promise<void | Response> {
@@ -24,34 +23,18 @@ export async function createStaff(req: Request, res: Response, next: NextFunctio
             return;
         }
 
-        // Validasi user_id ada
-        const user = await UserDAO.getById(body.user_id);
-        if (!user) {
-            next(new BadRequestError(`User with ID ${body.user_id} not found`));
-            return;
-        }
-
-        // Cek apakah user sudah memiliki staff
-        const existingStaff = await StaffDAO.getByUserId(body.user_id);
-        if (existingStaff) {
-            next(new BadRequestError(`User already has a staff profile`));
-            return;
-        }
-
-        // Validate email format jika ada
-        if (body.email) {
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (!emailRegex.test(body.email)) {
-                next(new BadRequestError('Invalid email format'));
-                return;
-            }
-        }
-
-        // Validate phone number format jika ada
+        // Validate phone number format
         if (body.phone_number) {
             const phoneRegex = /^[0-9+()-]+$/;
             if (!phoneRegex.test(body.phone_number)) {
                 next(new BadRequestError('Invalid phone number format'));
+                return;
+            }
+
+            // Cek phone number unique
+            const isUnique = await StaffDAO.isPhoneNumberUnique(body.phone_number);
+            if (!isUnique) {
+                next(new BadRequestError('Phone number already exists'));
                 return;
             }
         }
@@ -125,20 +108,18 @@ export async function updateStaff(req: Request, res: Response, next: NextFunctio
             return;
         }
 
-        // Validate email jika provided
-        if (body.email) {
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (!emailRegex.test(body.email)) {
-                next(new BadRequestError('Invalid email format'));
-                return;
-            }
-        }
-
-        // Validate phone number jika provided
+        // Validate phone number jika diupdate
         if (body.phone_number) {
             const phoneRegex = /^[0-9+()-]+$/;
             if (!phoneRegex.test(body.phone_number)) {
                 next(new BadRequestError('Invalid phone number format'));
+                return;
+            }
+
+            // Cek phone number unique (kecuali untuk staff ini sendiri)
+            const isUnique = await StaffDAO.isPhoneNumberUnique(body.phone_number, id);
+            if (!isUnique) {
+                next(new BadRequestError('Phone number already exists'));
                 return;
             }
         }
@@ -195,7 +176,7 @@ export async function searchStaffByName(req: Request, res: Response, next: NextF
         const staff = await StaffDAO.getStaffByName(name as string);
         
         if (!staff) {
-            res.send(null); // Return null instead of error for dropdown purposes
+            res.send(null);
             return;
         }
 
@@ -242,6 +223,29 @@ export async function reactivateStaff(req: Request, res: Response, next: NextFun
             message: 'Staff reactivated successfully',
             staff: result
         });
+    } catch (error: any) {
+        next(new InternalServerError(error));
+    }
+}
+
+// NEW: Get staff by phone
+export async function getStaffByPhone(req: Request, res: Response, next: NextFunction): Promise<void | Response> {
+    try {
+        const { phone } = req.query;
+        
+        if (!phone) {
+            next(new BadRequestError('Phone number is required'));
+            return;
+        }
+
+        const staff = await StaffDAO.getStaffByPhone(phone as string);
+        
+        if (!staff) {
+            res.send(null);
+            return;
+        }
+
+        res.send(staff);
     } catch (error: any) {
         next(new InternalServerError(error));
     }
