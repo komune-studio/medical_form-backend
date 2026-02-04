@@ -132,72 +132,62 @@ export async function getPatientByCode(req: Request, res: Response, next: NextFu
     }
 }
 
-export async function getAllPatients(req: Request, res: Response, next: NextFunction): Promise<void | Response> {
+export async function getAllPatients(req: Request, res: Response) {
     try {
-        const {
-            gender,
-            blood_type,
-            search,
-            dateFrom,
-            dateTo,
-            limit,
-            offset,
-            exportAll
-        } = req.query;
-
-        const options: PatientDAO.GetAllOptions = {};
-
-        if (gender && ['MALE', 'FEMALE'].includes(gender as string)) {
-            options.gender = gender as any;
+        const { search, gender, blood_type, timeRange } = req.query;
+        
+        const options: any = {};
+        
+        if (search) options.search = search as string;
+        if (gender) options.gender = gender;
+        if (blood_type) options.blood_type = blood_type;
+        
+        // Handle time range filter
+        if (timeRange && timeRange !== 'all') {
+            const today = new Date();
+            today.setHours(23, 59, 59, 999);
+            
+            switch (timeRange) {
+                case 'today':
+                    const todayStart = new Date();
+                    todayStart.setHours(0, 0, 0, 0);
+                    options.dateFrom = todayStart;
+                    options.dateTo = today;
+                    break;
+                    
+                case 'last7days':
+                    const last7Days = new Date();
+                    last7Days.setDate(today.getDate() - 7);
+                    last7Days.setHours(0, 0, 0, 0);
+                    options.dateFrom = last7Days;
+                    options.dateTo = today;
+                    break;
+                    
+                case 'last30days':
+                    const last30Days = new Date();
+                    last30Days.setDate(today.getDate() - 30);
+                    last30Days.setHours(0, 0, 0, 0);
+                    options.dateFrom = last30Days;
+                    options.dateTo = today;
+                    break;
+            }
         }
-
-        if (blood_type && ['A', 'B', 'AB', 'O'].includes(blood_type as string)) {
-            options.blood_type = blood_type as any;
-        }
-
-        if (search) {
-            options.search = search as string;
-        }
-
-        // Handle date range
-        if (dateFrom) {
-            options.dateFrom = new Date(dateFrom as string);
-        }
-        if (dateTo) {
-            options.dateTo = new Date(dateTo as string);
-        }
-
-        // Pagination
-        if (limit) {
-            options.limit = parseInt(limit as string);
-        }
-        if (offset) {
-            options.offset = parseInt(offset as string);
-        }
-
-        // Jika exportAll = true, ambil semua tanpa pagination
-        if (exportAll === 'true') {
-            options.limit = undefined;
-            options.offset = undefined;
-        }
-
-        // Filter berdasarkan user yang login jika bukan admin
-        const userRole = req.decoded?.role; // Asumsi ada role di token
-        if (userRole !== 'ADMIN') {
-            options.created_by = parseInt(req.decoded?.id);
-        }
-
+        
         const patients = await PatientDAO.getAll(options);
         
-        res.send({
+        return res.status(200).json({
             http_code: 200,
-            data: patients,
-            count: patients.length,
-            message: exportAll === 'true' ? 'All patients data for export' : 'Patients retrieved successfully'
+            message: 'Patients retrieved successfully',
+            data: patients
         });
-        
-    } catch (error: any) {
-        next(new InternalServerError(error));
+    } catch (error) {
+        console.error('Error getting patients:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+        return res.status(500).json({
+            http_code: 500,
+            message: 'Internal server error',
+            error: errorMessage
+        });
     }
 }
 
