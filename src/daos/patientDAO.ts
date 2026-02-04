@@ -105,12 +105,12 @@ export function formatCreate(data: any): Prisma.patientCreateInput {
         gender: data.gender
     };
 
-    // Generate patient code jika tidak ada
-    if (!data.patient_code) {
-        formatted.patient_code = `PAT-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    } else {
+    // Hanya set patient_code jika disediakan dan tidak kosong
+    if (data.patient_code && data.patient_code.trim() !== '') {
         formatted.patient_code = data.patient_code;
     }
+    // Jika tidak ada patient_code, biarkan undefined
+    // nanti akan di-generate otomatis di function create()
 
     // Optional fields
     if (data.date_of_birth) formatted.date_of_birth = new Date(data.date_of_birth);
@@ -137,16 +137,20 @@ export async function create(data: Prisma.patientCreateInput): Promise<any> {
         let nextNumber = 1;
         
         if (lastPatient?.patient_code) {
-            // Extract number dari patient_code yang ada
+            // Extract number dari patient_code yang ada (format: PAT-000001)
             const matches = lastPatient.patient_code.match(/PAT-(\d+)/);
             if (matches && matches[1]) {
-                nextNumber = parseInt(matches[1]) + 1;
+                const lastNumber = parseInt(matches[1]);
+                nextNumber = lastNumber + 1;
             } else {
+                // Jika format tidak sesuai, gunakan ID + 1
                 nextNumber = lastPatient.id + 1;
             }
         } else if (lastPatient?.id) {
+            // Jika ada ID tapi tidak ada patient_code
             nextNumber = lastPatient.id + 1;
         }
+        // Jika tidak ada patient sama sekali, nextNumber tetap 1
         
         data.patient_code = `PAT-${nextNumber.toString().padStart(6, '0')}`;
     }
@@ -405,6 +409,11 @@ export async function validatePhoneUnique(phone: string, excludeId?: number): Pr
 
 // Validasi patient code unik
 export async function validatePatientCodeUnique(patient_code: string, excludeId?: number): Promise<boolean> {
+    // Jika patient_code kosong, itu valid (akan di-generate otomatis)
+    if (!patient_code || patient_code.trim() === '') {
+        return true;
+    }
+    
     const where: Prisma.patientWhereInput = { patient_code };
     
     if (excludeId) {
