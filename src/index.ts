@@ -8,6 +8,7 @@ import userRoutes from './routes/v1/userRoutes';
 import uploadRoutes from './routes/v1/uploadRoutes';
 import staffRoutes from "./routes/v1/staffRoutes";
 import patientRoutes from "./routes/v1/patientRoutes";
+import medicalHistoryRoutes from "./routes/v1/medicalHistoryRoutes";
 
 const app: Express = express();
 
@@ -26,6 +27,7 @@ app.use('/v1/user', userRoutes);
 app.use('/v1/upload', uploadRoutes);
 app.use('/v1/staff', staffRoutes);
 app.use('/v1/patient', patientRoutes);
+app.use('/v1/medical-history', medicalHistoryRoutes);
 app.use(errorMiddleware);
 
 async function main() {

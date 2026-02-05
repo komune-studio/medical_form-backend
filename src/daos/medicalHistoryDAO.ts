@@ -1,0 +1,429 @@
+import { Prisma } from '@prisma/client';
+import prisma from '../services/prisma';
+import hidash from '../utils/hidash';
+
+const model = prisma.medical_history;
+
+export interface CreateMedicalHistoryData {
+    patient_id: number;
+    appointment_date: Date;
+    staff_id?: number | null;
+    service_type?: string | null;
+    diagnosis_result?: string | null;
+    pain_before?: number | null;
+    pain_after?: number | null;
+    treatments?: string | null;
+    exercise?: string | null;
+    homework?: string | null;
+    recommended_next_session?: string | null;
+    additional_notes?: string | null;
+}
+
+export interface UpdateMedicalHistoryData {
+    appointment_date?: Date;
+    staff_id?: number | null;
+    service_type?: string | null;
+    diagnosis_result?: string | null;
+    pain_before?: number | null;
+    pain_after?: number | null;
+    treatments?: string | null;
+    exercise?: string | null;
+    homework?: string | null;
+    recommended_next_session?: string | null;
+    additional_notes?: string | null;
+}
+
+export interface GetAllOptions {
+    patient_id?: number;
+    staff_id?: number;
+    service_type?: string;
+    dateFrom?: Date;
+    dateTo?: Date;
+    search?: string;
+    limit?: number;
+    offset?: number;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+}
+
+// Perbaikan: service_type bisa null
+export interface ServiceTypeStat {
+    service_type: string | null;
+    _count: number;
+}
+
+export interface MedicalHistoryStats {
+    totalRecords: number;
+    recordsByServiceType: ServiceTypeStat[];
+    averagePainReduction: number;
+    recentRecords: any[];
+}
+
+export function formatMedicalHistoryForTable(history: any) {
+    if (!history) return null;
+    
+    return {
+        id: history.id,
+        patient_id: history.patient_id,
+        patient_name: history.patient?.name || '-',
+        patient_code: history.patient?.patient_code || '-',
+        appointment_date: history.appointment_date,
+        staff_id: history.staff_id,
+        staff_name: history.staff?.name || '-',
+        service_type: history.service_type,
+        diagnosis_result: history.diagnosis_result,
+        pain_before: history.pain_before,
+        pain_after: history.pain_after,
+        pain_reduction: history.pain_before && history.pain_after ? 
+            history.pain_before - history.pain_after : null,
+        treatments: history.treatments,
+        exercise: history.exercise,
+        homework: history.homework,
+        recommended_next_session: history.recommended_next_session,
+        additional_notes: history.additional_notes,
+        created_at: history.created_at,
+        updated_at: history.updated_at
+    };
+}
+
+export function getRequired(): Array<keyof CreateMedicalHistoryData> {
+    const required: Array<keyof CreateMedicalHistoryData> = [
+        'patient_id',
+        'appointment_date'
+    ];
+    return required;
+}
+
+export function formatCreate(data: any): Prisma.medical_historyCreateInput {
+    const formatted: Prisma.medical_historyCreateInput = {
+        patient: { connect: { id: data.patient_id } },
+        appointment_date: new Date(data.appointment_date)
+    };
+
+    // Optional fields
+    if (data.staff_id) formatted.staff = { connect: { id: data.staff_id } };
+    if (data.service_type) formatted.service_type = data.service_type;
+    if (data.diagnosis_result) formatted.diagnosis_result = data.diagnosis_result;
+    if (data.pain_before !== undefined) formatted.pain_before = data.pain_before;
+    if (data.pain_after !== undefined) formatted.pain_after = data.pain_after;
+    if (data.treatments) formatted.treatments = data.treatments;
+    if (data.exercise) formatted.exercise = data.exercise;
+    if (data.homework) formatted.homework = data.homework;
+    if (data.recommended_next_session) formatted.recommended_next_session = data.recommended_next_session;
+    if (data.additional_notes) formatted.additional_notes = data.additional_notes;
+
+    return formatted;
+}
+
+export async function create(data: Prisma.medical_historyCreateInput): Promise<any> {
+    const result = await model.create({ 
+        data,
+        include: {
+            patient: true,
+            staff: true
+        }
+    });
+    return formatMedicalHistoryForTable(result);
+}
+
+export async function getById(id: number): Promise<any | null> {
+    const result = await model.findUnique({ 
+        where: { id },
+        include: {
+            patient: true,
+            staff: true
+        }
+    });
+    return formatMedicalHistoryForTable(result);
+}
+
+export async function getByPatientId(patient_id: number, options?: GetAllOptions): Promise<any[]> {
+    const where: Prisma.medical_historyWhereInput = { patient_id };
+    
+    // Apply additional filters if provided
+    if (options?.dateFrom && options?.dateTo) {
+        where.appointment_date = {
+            gte: options.dateFrom,
+            lte: options.dateTo
+        };
+    }
+    
+    if (options?.service_type) {
+        where.service_type = options.service_type;
+    }
+    
+    if (options?.staff_id) {
+        where.staff_id = options.staff_id;
+    }
+
+    const queryOptions: Prisma.medical_historyFindManyArgs = {
+        where,
+        include: {
+            patient: true,
+            staff: true
+        },
+        orderBy: {
+            appointment_date: 'desc'
+        }
+    };
+
+    if (options?.limit) queryOptions.take = options.limit;
+    if (options?.offset) queryOptions.skip = options.offset;
+
+    const results = await model.findMany(queryOptions);
+    return results.map(formatMedicalHistoryForTable);
+}
+
+export async function getAll(options?: GetAllOptions): Promise<any[]> {
+    const where: Prisma.medical_historyWhereInput = {};
+
+    if (options?.patient_id) {
+        where.patient_id = options.patient_id;
+    }
+
+    if (options?.staff_id) {
+        where.staff_id = options.staff_id;
+    }
+
+    if (options?.service_type) {
+        where.service_type = options.service_type;
+    }
+
+    if (options?.search) {
+        where.OR = [
+            { service_type: { contains: options.search } },
+            { diagnosis_result: { contains: options.search } },
+            { treatments: { contains: options.search } },
+            { exercise: { contains: options.search } },
+            { patient: { name: { contains: options.search } } },
+            { patient: { patient_code: { contains: options.search } } }
+        ];
+    }
+
+    if (options?.dateFrom && options?.dateTo) {
+        where.appointment_date = {
+            gte: options.dateFrom,
+            lte: options.dateTo
+        };
+    }
+
+    const queryOptions: Prisma.medical_historyFindManyArgs = {
+        where,
+        include: {
+            patient: true,
+            staff: true
+        },
+        orderBy: [
+            { appointment_date: 'desc' },
+            { id: 'desc' }
+        ]
+    };
+
+    if (options?.limit) queryOptions.take = options.limit;
+    if (options?.offset) queryOptions.skip = options.offset;
+
+    if (options?.sortBy) {
+        const sortOrder = options.sortOrder || 'desc';
+        queryOptions.orderBy = { [options.sortBy]: sortOrder } as any;
+    }
+
+    const results = await model.findMany(queryOptions);
+    return results.map(formatMedicalHistoryForTable);
+}
+
+export async function update(id: number, data: UpdateMedicalHistoryData): Promise<any> {
+    const updateData: Prisma.medical_historyUpdateInput = {
+        updated_at: new Date()
+    };
+
+    if (data.appointment_date !== undefined) {
+        updateData.appointment_date = new Date(data.appointment_date);
+    }
+    if (data.staff_id !== undefined) {
+        updateData.staff = data.staff_id ? { connect: { id: data.staff_id } } : { disconnect: true };
+    }
+    if (data.service_type !== undefined) updateData.service_type = data.service_type;
+    if (data.diagnosis_result !== undefined) updateData.diagnosis_result = data.diagnosis_result;
+    if (data.pain_before !== undefined) updateData.pain_before = data.pain_before;
+    if (data.pain_after !== undefined) updateData.pain_after = data.pain_after;
+    if (data.treatments !== undefined) updateData.treatments = data.treatments;
+    if (data.exercise !== undefined) updateData.exercise = data.exercise;
+    if (data.homework !== undefined) updateData.homework = data.homework;
+    if (data.recommended_next_session !== undefined) updateData.recommended_next_session = data.recommended_next_session;
+    if (data.additional_notes !== undefined) updateData.additional_notes = data.additional_notes;
+
+    const result = await model.update({
+        where: { id },
+        data: updateData,
+        include: {
+            patient: true,
+            staff: true
+        }
+    });
+    
+    return formatMedicalHistoryForTable(result);
+}
+
+export async function deleteMedicalHistory(id: number): Promise<any> {
+    return await model.delete({ 
+        where: { id },
+        include: {
+            patient: true,
+            staff: true
+        }
+    });
+}
+
+export async function getStats(dateFrom?: Date, dateTo?: Date): Promise<MedicalHistoryStats> {
+    const where: Prisma.medical_historyWhereInput = {};
+    
+    if (dateFrom && dateTo) {
+        where.appointment_date = {
+            gte: dateFrom,
+            lte: dateTo
+        };
+    }
+
+    const totalRecords = await model.count({ where });
+    
+    // Get records by service type (service_type bisa null)
+    const recordsByServiceTypeRaw = await model.groupBy({
+        by: ['service_type'],
+        where,
+        _count: true
+    });
+
+    // Konversi ke tipe ServiceTypeStat
+    const recordsByServiceType: ServiceTypeStat[] = recordsByServiceTypeRaw.map(record => ({
+        service_type: record.service_type,
+        _count: record._count
+    }));
+
+    // Calculate average pain reduction
+    const painData = await model.findMany({
+        where: {
+            ...where,
+            pain_before: { not: null },
+            pain_after: { not: null }
+        },
+        select: {
+            pain_before: true,
+            pain_after: true
+        }
+    });
+
+    let averagePainReduction = 0;
+    if (painData.length > 0) {
+        const totalReduction = painData.reduce((sum, record) => {
+            return sum + (record.pain_before! - record.pain_after!);
+        }, 0);
+        averagePainReduction = totalReduction / painData.length;
+    }
+
+    const recentRecords = await model.findMany({
+        where,
+        include: {
+            patient: true,
+            staff: true
+        },
+        take: 10,
+        orderBy: { appointment_date: 'desc' }
+    });
+
+    return {
+        totalRecords,
+        recordsByServiceType,
+        averagePainReduction: parseFloat(averagePainReduction.toFixed(2)),
+        recentRecords: recentRecords.map(formatMedicalHistoryForTable)
+    };
+}
+
+export async function getRecentMedicalHistories(limit: number = 10): Promise<any[]> {
+    const results = await model.findMany({
+        include: {
+            patient: true,
+            staff: true
+        },
+        take: limit,
+        orderBy: { appointment_date: 'desc' }
+    });
+    
+    return results.map(formatMedicalHistoryForTable);
+}
+
+export async function searchMedicalHistories(searchTerm: string): Promise<any[]> {
+    const results = await model.findMany({
+        where: {
+            OR: [
+                { service_type: { contains: searchTerm } },
+                { diagnosis_result: { contains: searchTerm } },
+                { treatments: { contains: searchTerm } },
+                { patient: { name: { contains: searchTerm } } },
+                { patient: { patient_code: { contains: searchTerm } } },
+                { staff: { name: { contains: searchTerm } } }
+            ]
+        },
+        include: {
+            patient: true,
+            staff: true
+        },
+        orderBy: { appointment_date: 'desc' },
+        take: 50
+    });
+    
+    return results.map(formatMedicalHistoryForTable);
+}
+
+export async function validatePatientExists(patient_id: number): Promise<boolean> {
+    const patient = await prisma.patient.findUnique({
+        where: { id: patient_id }
+    });
+    return !!patient;
+}
+
+export async function validateStaffExists(staff_id: number): Promise<boolean> {
+    const staff = await prisma.staff.findUnique({
+        where: { id: staff_id }
+    });
+    return !!staff;
+}
+
+export async function getByDateRange(startDate: Date, endDate: Date): Promise<any[]> {
+    const results = await model.findMany({
+        where: {
+            appointment_date: {
+                gte: startDate,
+                lte: endDate
+            }
+        },
+        include: {
+            patient: true,
+            staff: true
+        },
+        orderBy: { appointment_date: 'asc' }
+    });
+    
+    return results.map(formatMedicalHistoryForTable);
+}
+
+export async function getUpcomingAppointments(days: number = 7): Promise<any[]> {
+    const today = new Date();
+    const endDate = new Date();
+    endDate.setDate(today.getDate() + days);
+    
+    const results = await model.findMany({
+        where: {
+            appointment_date: {
+                gte: today,
+                lte: endDate
+            }
+        },
+        include: {
+            patient: true,
+            staff: true
+        },
+        orderBy: { appointment_date: 'asc' }
+    });
+    
+    return results.map(formatMedicalHistoryForTable);
+}
