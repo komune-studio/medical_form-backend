@@ -17,6 +17,7 @@ export interface CreateMedicalHistoryData {
     homework?: string | null;
     recommended_next_session?: string | null;
     additional_notes?: string | null;
+    body_annotation?: string | null;  // 👈 TAMBAH INI
 }
 
 export interface UpdateMedicalHistoryData {
@@ -31,6 +32,7 @@ export interface UpdateMedicalHistoryData {
     homework?: string | null;
     recommended_next_session?: string | null;
     additional_notes?: string | null;
+    body_annotation?: string | null;  // 👈 TAMBAH INI
 }
 
 export interface GetAllOptions {
@@ -46,7 +48,6 @@ export interface GetAllOptions {
     sortOrder?: 'asc' | 'desc';
 }
 
-// Perbaikan: service_type bisa null
 export interface ServiceTypeStat {
     service_type: string | null;
     _count: number;
@@ -81,6 +82,7 @@ export function formatMedicalHistoryForTable(history: any) {
         homework: history.homework,
         recommended_next_session: history.recommended_next_session,
         additional_notes: history.additional_notes,
+        body_annotation: history.body_annotation,  // 👈 TAMBAH INI
         created_at: history.created_at,
         updated_at: history.updated_at
     };
@@ -111,6 +113,7 @@ export function formatCreate(data: any): Prisma.medical_historyCreateInput {
     if (data.homework) formatted.homework = data.homework;
     if (data.recommended_next_session) formatted.recommended_next_session = data.recommended_next_session;
     if (data.additional_notes) formatted.additional_notes = data.additional_notes;
+    if (data.body_annotation) formatted.body_annotation = data.body_annotation;  // 👈 TAMBAH INI
 
     return formatted;
 }
@@ -140,7 +143,6 @@ export async function getById(id: number): Promise<any | null> {
 export async function getByPatientId(patient_id: number, options?: GetAllOptions): Promise<any[]> {
     const where: Prisma.medical_historyWhereInput = { patient_id };
     
-    // Apply additional filters if provided
     if (options?.dateFrom && options?.dateTo) {
         where.appointment_date = {
             gte: options.dateFrom,
@@ -251,6 +253,7 @@ export async function update(id: number, data: UpdateMedicalHistoryData): Promis
     if (data.homework !== undefined) updateData.homework = data.homework;
     if (data.recommended_next_session !== undefined) updateData.recommended_next_session = data.recommended_next_session;
     if (data.additional_notes !== undefined) updateData.additional_notes = data.additional_notes;
+    if (data.body_annotation !== undefined) updateData.body_annotation = data.body_annotation;  // 👈 TAMBAH INI
 
     const result = await model.update({
         where: { id },
@@ -286,20 +289,17 @@ export async function getStats(dateFrom?: Date, dateTo?: Date): Promise<MedicalH
 
     const totalRecords = await model.count({ where });
     
-    // Get records by service type (service_type bisa null)
     const recordsByServiceTypeRaw = await model.groupBy({
         by: ['service_type'],
         where,
         _count: true
     });
 
-    // Konversi ke tipe ServiceTypeStat
     const recordsByServiceType: ServiceTypeStat[] = recordsByServiceTypeRaw.map(record => ({
         service_type: record.service_type,
         _count: record._count
     }));
 
-    // Calculate average pain reduction
     const painData = await model.findMany({
         where: {
             ...where,
