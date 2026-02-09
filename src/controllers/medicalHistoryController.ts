@@ -471,3 +471,36 @@ export async function exportMedicalHistoriesToCSV(req: Request, res: Response, n
         next(new InternalServerError(error));
     }
 }
+
+export async function getPatientProgressReport(req: Request, res: Response) {
+    try {
+        const patientId = parseInt(req.params.patientId);
+
+        if (isNaN(patientId)) {
+            return res.status(400).json({
+                http_code: 400,
+                error_message: 'Invalid patient ID'
+            });
+        }
+
+        const report = await MedicalHistoryDAO.getPatientProgressReport(patientId);
+
+        if (!report.patient) {
+            return res.status(404).json({
+                http_code: 404,
+                error_message: 'No medical history found for this patient'
+            });
+        }
+
+        return res.status(200).json({
+            http_code: 200,
+            data: report
+        });
+    } catch (error: any) {
+        console.error('Error getting progress report:', error);
+        return res.status(500).json({
+            http_code: 500,
+            error_message: error.message
+        });
+    }
+}

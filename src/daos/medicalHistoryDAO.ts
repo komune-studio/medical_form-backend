@@ -427,3 +427,29 @@ export async function getUpcomingAppointments(days: number = 7): Promise<any[]> 
     
     return results.map(formatMedicalHistoryForTable);
 }
+export async function getPatientProgressReport(patient_id: number): Promise<any> {
+    const histories = await model.findMany({
+        where: { patient_id },
+        include: {
+            patient: true,
+            staff: true
+        },
+        orderBy: {
+            appointment_date: 'asc' // 👈 IMPORTANT: Sort by date ascending
+        }
+    });
+
+    // 👇 Tambahin session number
+    const withSessionNumbers = histories.map((history, index) => ({
+        ...formatMedicalHistoryForTable(history),
+        session_number: index + 1, // Session #1, #2, #3, dst
+        session_date: history.appointment_date
+    }));
+
+    // 👇 Return data lengkap + patient info
+    return {
+        patient: histories[0]?.patient || null,
+        total_sessions: histories.length,
+        sessions: withSessionNumbers
+    };
+}

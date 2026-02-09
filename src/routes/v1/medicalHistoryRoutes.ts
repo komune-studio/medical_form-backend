@@ -14,6 +14,7 @@ router.get('/date-range', auth.auth, controller.getByDateRange);
 router.get('/stats', auth.auth, controller.getMedicalHistoryStats);
 router.get('/patient/:patientId', auth.auth, controller.getMedicalHistoriesByPatient);
 router.get('/:id', auth.auth, controller.getMedicalHistoryById);
+router.get('/progress-report/:patientId', auth.auth, controller.getPatientProgressReport);
 router.put('/:id', auth.auth, controller.updateMedicalHistory);
 router.delete('/:id', auth.auth, controller.deleteMedicalHistory);
 
