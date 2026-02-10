@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import prisma from '../services/prisma';
 import hidash from '../utils/hidash';
+import { fetchImageAsBase64, isValidImageUrl } from '../utils/Imageutils';
 
 const model = prisma.medical_history;
 
@@ -17,7 +18,7 @@ export interface CreateMedicalHistoryData {
     homework?: string | null;
     recommended_next_session?: string | null;
     additional_notes?: string | null;
-    body_annotation?: string | null;  // 👈 TAMBAH INI
+    body_annotation?: string | null;
 }
 
 export interface UpdateMedicalHistoryData {
@@ -32,7 +33,7 @@ export interface UpdateMedicalHistoryData {
     homework?: string | null;
     recommended_next_session?: string | null;
     additional_notes?: string | null;
-    body_annotation?: string | null;  // 👈 TAMBAH INI
+    body_annotation?: string | null;
 }
 
 export interface GetAllOptions {
@@ -82,7 +83,7 @@ export function formatMedicalHistoryForTable(history: any) {
         homework: history.homework,
         recommended_next_session: history.recommended_next_session,
         additional_notes: history.additional_notes,
-        body_annotation: history.body_annotation,  // 👈 TAMBAH INI
+        body_annotation: history.body_annotation,
         created_at: history.created_at,
         updated_at: history.updated_at
     };
@@ -113,7 +114,7 @@ export function formatCreate(data: any): Prisma.medical_historyCreateInput {
     if (data.homework) formatted.homework = data.homework;
     if (data.recommended_next_session) formatted.recommended_next_session = data.recommended_next_session;
     if (data.additional_notes) formatted.additional_notes = data.additional_notes;
-    if (data.body_annotation) formatted.body_annotation = data.body_annotation;  // 👈 TAMBAH INI
+    if (data.body_annotation) formatted.body_annotation = data.body_annotation;
 
     return formatted;
 }
@@ -253,7 +254,7 @@ export async function update(id: number, data: UpdateMedicalHistoryData): Promis
     if (data.homework !== undefined) updateData.homework = data.homework;
     if (data.recommended_next_session !== undefined) updateData.recommended_next_session = data.recommended_next_session;
     if (data.additional_notes !== undefined) updateData.additional_notes = data.additional_notes;
-    if (data.body_annotation !== undefined) updateData.body_annotation = data.body_annotation;  // 👈 TAMBAH INI
+    if (data.body_annotation !== undefined) updateData.body_annotation = data.body_annotation;
 
     const result = await model.update({
         where: { id },
@@ -427,6 +428,10 @@ export async function getUpcomingAppointments(days: number = 7): Promise<any[]> 
     
     return results.map(formatMedicalHistoryForTable);
 }
+
+/**
+ * 🔥 UPDATED: Get patient progress report with base64 encoded images
+ */
 export async function getPatientProgressReport(patient_id: number): Promise<any> {
     const histories = await model.findMany({
         where: { patient_id },
@@ -435,21 +440,50 @@ export async function getPatientProgressReport(patient_id: number): Promise<any>
             staff: true
         },
         orderBy: {
-            appointment_date: 'asc' // 👈 IMPORTANT: Sort by date ascending
+            appointment_date: 'asc'
         }
     });
 
-    // 👇 Tambahin session number
-    const withSessionNumbers = histories.map((history, index) => ({
-        ...formatMedicalHistoryForTable(history),
-        session_number: index + 1, // Session #1, #2, #3, dst
-        session_date: history.appointment_date
-    }));
+    // Convert body_annotation URLs to base64 concurrently
+    const sessionsWithBase64Images = await Promise.all(
+        histories.map(async (history, index) => {
+            const formatted = formatMedicalHistoryForTable(history);
+            
+            // Guard clause for null formatted result
+            if (!formatted) {
+                return null;
+            }
+            
+            // If body_annotation exists and is a valid image URL, fetch and convert to base64
+            let body_annotation_base64: string | null = null;
+            
+            if (isValidImageUrl(formatted.body_annotation)) {
+                console.log(`Fetching image for session ${index + 1}: ${formatted.body_annotation}`);
+                body_annotation_base64 = await fetchImageAsBase64(formatted.body_annotation);
+                
+                if (body_annotation_base64) {
+                    console.log(`✅ Successfully converted image to base64 for session ${index + 1}`);
+                } else {
+                    console.warn(`⚠️ Failed to convert image for session ${index + 1}`);
+                }
+            }
+            
+            return {
+                ...formatted,
+                session_number: index + 1,
+                session_date: history.appointment_date,
+                body_annotation_url: formatted.body_annotation, // Keep original URL
+                body_annotation_base64: body_annotation_base64  // Add base64 version
+            };
+        })
+    );
 
-    // 👇 Return data lengkap + patient info
+    // Filter out null sessions
+    const validSessions = sessionsWithBase64Images.filter(session => session !== null);
+
     return {
         patient: histories[0]?.patient || null,
-        total_sessions: histories.length,
-        sessions: withSessionNumbers
+        total_sessions: validSessions.length,
+        sessions: validSessions
     };
 }
