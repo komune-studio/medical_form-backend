@@ -12,7 +12,8 @@ export interface CreatePatientData {
     phone?: string | null;
     email?: string | null;
     address?: string | null;
-    blood_type?: Prisma.patientCreateInput['blood_type'] | null;
+    height?: number | null;
+    weight?: number | null;
     allergies?: string | null;
     medical_notes?: string | null;
     created_by?: number | null;
@@ -26,7 +27,8 @@ export interface UpdatePatientData {
     phone?: string | null;
     email?: string | null;
     address?: string | null;
-    blood_type?: Prisma.patientCreateInput['blood_type'] | null;
+    height?: number | null;
+    weight?: number | null;
     allergies?: string | null;
     medical_notes?: string | null;
 }
@@ -34,7 +36,6 @@ export interface UpdatePatientData {
 export interface GetAllOptions {
     search?: string;
     gender?: Prisma.patientCreateInput['gender'];
-    blood_type?: Prisma.patientCreateInput['blood_type'];
     created_by?: number;
     dateFrom?: Date;
     dateTo?: Date;
@@ -67,6 +68,14 @@ export function formatPatientForTable(patient: any) {
             age--;
         }
     }
+
+    // Calculate BMI if height and weight are available
+    let bmi = null;
+    if (patient.height && patient.weight) {
+        const heightInMeters = Number(patient.height) / 100;
+        bmi = Number(patient.weight) / (heightInMeters * heightInMeters);
+        bmi = Math.round(bmi * 10) / 10; // Round to 1 decimal
+    }
     
     return {
         id: patient.id,
@@ -78,7 +87,9 @@ export function formatPatientForTable(patient: any) {
         phone: patient.phone,
         email: patient.email,
         address: patient.address,
-        blood_type: patient.blood_type,
+        height: patient.height ? Number(patient.height) : null,
+        weight: patient.weight ? Number(patient.weight) : null,
+        bmi: bmi,
         allergies: patient.allergies,
         medical_notes: patient.medical_notes,
         created_by: patient.created_by,
@@ -94,10 +105,8 @@ export interface PatientStats {
         gender: Prisma.patientCreateInput['gender'];
         _count: number;
     }>;
-    patientsByBloodType: Array<{
-        blood_type: Prisma.patientCreateInput['blood_type'];
-        _count: number;
-    }>;
+    averageAge: number | null;
+    averageBMI: number | null;
     recentPatients: any[];
 }
 
@@ -121,7 +130,8 @@ export function formatCreate(data: any): Prisma.patientCreateInput {
     if (data.phone) formatted.phone = data.phone;
     if (data.email) formatted.email = data.email;
     if (data.address) formatted.address = data.address;
-    if (data.blood_type) formatted.blood_type = data.blood_type;
+    if (data.height) formatted.height = data.height;
+    if (data.weight) formatted.weight = data.weight;
     if (data.allergies) formatted.allergies = data.allergies;
     if (data.medical_notes) formatted.medical_notes = data.medical_notes;
     if (data.created_by) formatted.users = { connect: { id: data.created_by } };
@@ -143,8 +153,6 @@ export async function create(data: Prisma.patientCreateInput): Promise<any> {
     });
     return formatPatientForTable(result);
 }
-
-// ... (sisanya tetap sama dari code sebelumnya) ...
 
 export async function getById(id: number): Promise<any | null> {
     const result = await model.findUnique({ 
@@ -180,10 +188,6 @@ export async function getAll(options?: GetAllOptions): Promise<any[]> {
 
     if (options?.gender) {
         where.gender = options.gender;
-    }
-
-    if (options?.blood_type) {
-        where.blood_type = options.blood_type;
     }
 
     if (options?.created_by) {
@@ -237,7 +241,8 @@ export async function update(id: number, data: UpdatePatientData): Promise<any> 
     if (data.phone !== undefined) updateData.phone = data.phone;
     if (data.email !== undefined) updateData.email = data.email;
     if (data.address !== undefined) updateData.address = data.address;
-    if (data.blood_type !== undefined) updateData.blood_type = data.blood_type;
+    if (data.height !== undefined) updateData.height = data.height;
+    if (data.weight !== undefined) updateData.weight = data.weight;
     if (data.allergies !== undefined) updateData.allergies = data.allergies;
     if (data.medical_notes !== undefined) updateData.medical_notes = data.medical_notes;
 
@@ -303,12 +308,6 @@ export async function getStats(dateFrom?: Date, dateTo?: Date): Promise<PatientS
         _count: true
     });
 
-    const patientsByBloodType = await model.groupBy({
-        by: ['blood_type'],
-        where,
-        _count: true
-    });
-
     const recentPatients = await model.findMany({
         where,
         include: {
@@ -318,10 +317,54 @@ export async function getStats(dateFrom?: Date, dateTo?: Date): Promise<PatientS
         orderBy: { id: 'desc' }
     });
 
+    // Calculate average age
+    const patientsWithDOB = await model.findMany({
+        where: {
+            ...where,
+            date_of_birth: { not: null }
+        },
+        select: { date_of_birth: true }
+    });
+
+    let averageAge = null;
+    if (patientsWithDOB.length > 0) {
+        const today = new Date();
+        const ages = patientsWithDOB.map(p => {
+            const birthDate = new Date(p.date_of_birth!);
+            let age = today.getFullYear() - birthDate.getFullYear();
+            const monthDiff = today.getMonth() - birthDate.getMonth();
+            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+                age--;
+            }
+            return age;
+        });
+        averageAge = Math.round(ages.reduce((a, b) => a + b, 0) / ages.length);
+    }
+
+    // Calculate average BMI
+    const patientsWithBMI = await model.findMany({
+        where: {
+            ...where,
+            height: { not: null },
+            weight: { not: null }
+        },
+        select: { height: true, weight: true }
+    });
+
+    let averageBMI = null;
+    if (patientsWithBMI.length > 0) {
+        const bmis = patientsWithBMI.map(p => {
+            const heightInMeters = Number(p.height!) / 100;
+            return Number(p.weight!) / (heightInMeters * heightInMeters);
+        });
+        averageBMI = Math.round(bmis.reduce((a, b) => a + b, 0) / bmis.length * 10) / 10;
+    }
+
     return {
         totalPatients,
         patientsByGender,
-        patientsByBloodType,
+        averageAge,
+        averageBMI,
         recentPatients: recentPatients.map(formatPatientForTable)
     };
 }

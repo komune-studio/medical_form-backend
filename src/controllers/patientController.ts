@@ -69,6 +69,24 @@ export async function createPatient(req: Request, res: Response, next: NextFunct
             }
         }
 
+        // Validasi height jika ada
+        if (body.height !== undefined && body.height !== null && body.height !== '') {
+            const height = Number(body.height);
+            if (isNaN(height) || height <= 0 || height > 300) {
+                next(new BadRequestError('Height must be between 1-300 cm'));
+                return;
+            }
+        }
+
+        // Validasi weight jika ada
+        if (body.weight !== undefined && body.weight !== null && body.weight !== '') {
+            const weight = Number(body.weight);
+            if (isNaN(weight) || weight <= 0 || weight > 500) {
+                next(new BadRequestError('Weight must be between 1-500 kg'));
+                return;
+            }
+        }
+
         // Tambahkan created_by dari user yang login
         body.created_by = req.decoded?.id;
 
@@ -134,13 +152,12 @@ export async function getPatientByCode(req: Request, res: Response, next: NextFu
 
 export async function getAllPatients(req: Request, res: Response) {
     try {
-        const { search, gender, blood_type, timeRange } = req.query;
+        const { search, gender, timeRange } = req.query;
         
         const options: any = {};
         
         if (search) options.search = search as string;
         if (gender) options.gender = gender;
-        if (blood_type) options.blood_type = blood_type;
         
         // Handle time range filter
         if (timeRange && timeRange !== 'all') {
@@ -259,6 +276,24 @@ export async function updatePatient(req: Request, res: Response, next: NextFunct
                     next(new BadRequestError('Date of birth cannot be in the future'));
                     return;
                 }
+            }
+        }
+
+        // Validasi height jika diupdate
+        if (body.height !== undefined && body.height !== null && body.height !== '') {
+            const height = Number(body.height);
+            if (isNaN(height) || height <= 0 || height > 300) {
+                next(new BadRequestError('Height must be between 1-300 cm'));
+                return;
+            }
+        }
+
+        // Validasi weight jika diupdate
+        if (body.weight !== undefined && body.weight !== null && body.weight !== '') {
+            const weight = Number(body.weight);
+            if (isNaN(weight) || weight <= 0 || weight > 500) {
+                next(new BadRequestError('Weight must be between 1-500 kg'));
+                return;
             }
         }
 
@@ -432,7 +467,6 @@ export async function exportPatientsToCSV(req: Request, res: Response, next: Nex
     try {
         const {
             gender,
-            blood_type,
             search,
             dateFrom,
             dateTo
@@ -442,10 +476,6 @@ export async function exportPatientsToCSV(req: Request, res: Response, next: Nex
 
         if (gender && ['MALE', 'FEMALE'].includes(gender as string)) {
             options.gender = gender as any;
-        }
-
-        if (blood_type && ['A', 'B', 'AB', 'O'].includes(blood_type as string)) {
-            options.blood_type = blood_type as any;
         }
 
         if (search) {
@@ -480,7 +510,9 @@ export async function exportPatientsToCSV(req: Request, res: Response, next: Nex
             'Date of Birth',
             'Phone',
             'Email',
-            'Blood Type',
+            'Height (cm)',
+            'Weight (kg)',
+            'BMI',
             'Allergies',
             'Address',
             'Medical Notes',
@@ -502,7 +534,9 @@ export async function exportPatientsToCSV(req: Request, res: Response, next: Nex
                 patient.date_of_birth || '',
                 `"${patient.phone || ''}"`,
                 `"${patient.email || ''}"`,
-                `"${patient.blood_type || ''}"`,
+                patient.height || '',
+                patient.weight || '',
+                patient.bmi || '',
                 `"${patient.allergies || ''}"`,
                 `"${patient.address || ''}"`,
                 `"${patient.medical_notes || ''}"`,
