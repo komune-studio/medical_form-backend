@@ -425,12 +425,13 @@ export async function exportMedicalHistoriesToCSV(req: Request, res: Response, n
             'Patient Name',
             'Appointment Date',
             'Service Type',
-            'Injury Type', // BARU
+            'Injury Type',
             'Area Concern',
             'Staff Name',
             'Diagnosis Result',
-            'Expected Recovery Time', // BARU
-            'Objective Progress', // BARU
+            'Expected Recovery Time',
+            'Recovery Goals', // BARU
+            'Objective Progress',
             'Pain Before',
             'Pain After',
             'Pain Reduction',
@@ -455,12 +456,13 @@ export async function exportMedicalHistoriesToCSV(req: Request, res: Response, n
                 `"${history.patient_name || ''}"`,
                 history.appointment_date,
                 `"${history.service_type || ''}"`,
-                `"${history.injury_type || ''}"`, // BARU
+                `"${history.injury_type || ''}"`,
                 `"${history.area_concern || ''}"`,
                 `"${history.staff_name || ''}"`,
                 `"${history.diagnosis_result || ''}"`,
-                `"${history.expected_recovery_time || ''}"`, // BARU
-                `"${history.objective_progress || ''}"`, // BARU
+                `"${history.expected_recovery_time || ''}"`,
+                `"${history.recovery_goals || ''}"`, // BARU
+                `"${history.objective_progress || ''}"`,
                 history.pain_before || '',
                 history.pain_after || '',
                 history.pain_reduction || '',

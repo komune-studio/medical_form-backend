@@ -10,11 +10,12 @@ export interface CreateMedicalHistoryData {
     appointment_date: Date;
     staff_id?: number | null;
     service_type?: string | null;
-    injury_type?: string | null; // BARU
+    injury_type?: string | null;
     area_concern?: string | null;
     diagnosis_result?: string | null;
-    expected_recovery_time?: string | null; // BARU
-    objective_progress?: string | null; // BARU
+    expected_recovery_time?: string | null;
+    recovery_goals?: string | null; // BARU
+    objective_progress?: string | null;
     pain_before?: number | null;
     pain_after?: number | null;
     range_of_motion_impact?: string | null;
@@ -30,11 +31,12 @@ export interface UpdateMedicalHistoryData {
     appointment_date?: Date;
     staff_id?: number | null;
     service_type?: string | null;
-    injury_type?: string | null; // BARU
+    injury_type?: string | null;
     area_concern?: string | null;
     diagnosis_result?: string | null;
-    expected_recovery_time?: string | null; // BARU
-    objective_progress?: string | null; // BARU
+    expected_recovery_time?: string | null;
+    recovery_goals?: string | null; // BARU
+    objective_progress?: string | null;
     pain_before?: number | null;
     pain_after?: number | null;
     range_of_motion_impact?: string | null;
@@ -83,11 +85,12 @@ export function formatMedicalHistoryForTable(history: any) {
         staff_id: history.staff_id,
         staff_name: history.staff?.name || '-',
         service_type: history.service_type,
-        injury_type: history.injury_type, // BARU
+        injury_type: history.injury_type,
         area_concern: history.area_concern,
         diagnosis_result: history.diagnosis_result,
-        expected_recovery_time: history.expected_recovery_time, // BARU
-        objective_progress: history.objective_progress, // BARU
+        expected_recovery_time: history.expected_recovery_time,
+        recovery_goals: history.recovery_goals, // BARU
+        objective_progress: history.objective_progress,
         pain_before: history.pain_before,
         pain_after: history.pain_after,
         pain_reduction: history.pain_before && history.pain_after ? 
@@ -121,11 +124,12 @@ export function formatCreate(data: any): Prisma.medical_historyCreateInput {
     // Optional fields
     if (data.staff_id) formatted.staff = { connect: { id: data.staff_id } };
     if (data.service_type) formatted.service_type = data.service_type;
-    if (data.injury_type) formatted.injury_type = data.injury_type; // BARU
+    if (data.injury_type) formatted.injury_type = data.injury_type;
     if (data.area_concern) formatted.area_concern = data.area_concern;
     if (data.diagnosis_result) formatted.diagnosis_result = data.diagnosis_result;
-    if (data.expected_recovery_time) formatted.expected_recovery_time = data.expected_recovery_time; // BARU
-    if (data.objective_progress) formatted.objective_progress = data.objective_progress; // BARU
+    if (data.expected_recovery_time) formatted.expected_recovery_time = data.expected_recovery_time;
+    if (data.recovery_goals) formatted.recovery_goals = data.recovery_goals; // BARU
+    if (data.objective_progress) formatted.objective_progress = data.objective_progress;
     if (data.pain_before !== undefined) formatted.pain_before = data.pain_before;
     if (data.pain_after !== undefined) formatted.pain_after = data.pain_after;
     if (data.range_of_motion_impact) formatted.range_of_motion_impact = data.range_of_motion_impact;
@@ -215,10 +219,11 @@ export async function getAll(options?: GetAllOptions): Promise<any[]> {
     if (options?.search) {
         where.OR = [
             { service_type: { contains: options.search } },
-            { injury_type: { contains: options.search } }, // BARU
+            { injury_type: { contains: options.search } },
             { area_concern: { contains: options.search } },
             { diagnosis_result: { contains: options.search } },
-            { objective_progress: { contains: options.search } }, // BARU
+            { recovery_goals: { contains: options.search } }, // BARU
+            { objective_progress: { contains: options.search } },
             { treatments: { contains: options.search } },
             { exercise: { contains: options.search } },
             { recovery_tips: { contains: options.search } },
@@ -261,11 +266,12 @@ export async function update(id: number, data: UpdateMedicalHistoryData): Promis
         updateData.staff = data.staff_id ? { connect: { id: data.staff_id } } : { disconnect: true };
     }
     if (data.service_type !== undefined) updateData.service_type = data.service_type;
-    if (data.injury_type !== undefined) updateData.injury_type = data.injury_type; // BARU
+    if (data.injury_type !== undefined) updateData.injury_type = data.injury_type;
     if (data.area_concern !== undefined) updateData.area_concern = data.area_concern;
     if (data.diagnosis_result !== undefined) updateData.diagnosis_result = data.diagnosis_result;
-    if (data.expected_recovery_time !== undefined) updateData.expected_recovery_time = data.expected_recovery_time; // BARU
-    if (data.objective_progress !== undefined) updateData.objective_progress = data.objective_progress; // BARU
+    if (data.expected_recovery_time !== undefined) updateData.expected_recovery_time = data.expected_recovery_time;
+    if (data.recovery_goals !== undefined) updateData.recovery_goals = data.recovery_goals; // BARU
+    if (data.objective_progress !== undefined) updateData.objective_progress = data.objective_progress;
     if (data.pain_before !== undefined) updateData.pain_before = data.pain_before;
     if (data.pain_after !== undefined) updateData.pain_after = data.pain_after;
     if (data.range_of_motion_impact !== undefined) updateData.range_of_motion_impact = data.range_of_motion_impact;
@@ -377,10 +383,11 @@ export async function searchMedicalHistories(searchTerm: string): Promise<any[]>
         where: {
             OR: [
                 { service_type: { contains: searchTerm } },
-                { injury_type: { contains: searchTerm } }, // BARU
+                { injury_type: { contains: searchTerm } },
                 { area_concern: { contains: searchTerm } },
                 { diagnosis_result: { contains: searchTerm } },
-                { objective_progress: { contains: searchTerm } }, // BARU
+                { recovery_goals: { contains: searchTerm } }, // BARU
+                { objective_progress: { contains: searchTerm } },
                 { treatments: { contains: searchTerm } },
                 { recovery_tips: { contains: searchTerm } },
                 { patient: { name: { contains: searchTerm } } },
