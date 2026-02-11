@@ -264,13 +264,13 @@ export async function deleteMedicalHistory(req: Request, res: Response, next: Ne
     }
 }
 
-export async function getMedicalHistoryStats(req: Request, res: Response, next: NextFunction): Promise<void | Response> {
+export async function getStatistics(req: Request, res: Response, next: NextFunction): Promise<void | Response> {
     try {
         const { dateFrom, dateTo } = req.query;
-
+        
         let startDate: Date | undefined;
         let endDate: Date | undefined;
-
+        
         if (dateFrom) {
             startDate = new Date(dateFrom as string);
         }
@@ -425,19 +425,21 @@ export async function exportMedicalHistoriesToCSV(req: Request, res: Response, n
             'Patient Name',
             'Appointment Date',
             'Service Type',
-            'Area Concern', // BARU
+            'Injury Type', // BARU
+            'Area Concern',
             'Staff Name',
             'Diagnosis Result',
+            'Expected Recovery Time', // BARU
+            'Objective Progress', // BARU
             'Pain Before',
             'Pain After',
             'Pain Reduction',
-            'Range of Motion Impact', // BARU
+            'Range of Motion Impact',
             'Treatments',
             'Exercise',
             'Homework',
-            'Recovery Tips', // BARU
+            'Recovery Tips',
             'Next Session',
-            'Additional Notes',
             'Created At',
             'Updated At'
         ];
@@ -453,19 +455,21 @@ export async function exportMedicalHistoriesToCSV(req: Request, res: Response, n
                 `"${history.patient_name || ''}"`,
                 history.appointment_date,
                 `"${history.service_type || ''}"`,
-                `"${history.area_concern || ''}"`, // BARU
+                `"${history.injury_type || ''}"`, // BARU
+                `"${history.area_concern || ''}"`,
                 `"${history.staff_name || ''}"`,
                 `"${history.diagnosis_result || ''}"`,
+                `"${history.expected_recovery_time || ''}"`, // BARU
+                `"${history.objective_progress || ''}"`, // BARU
                 history.pain_before || '',
                 history.pain_after || '',
                 history.pain_reduction || '',
-                `"${history.range_of_motion_impact || ''}"`, // BARU
+                `"${history.range_of_motion_impact || ''}"`,
                 `"${history.treatments || ''}"`,
                 `"${history.exercise || ''}"`,
                 `"${history.homework || ''}"`,
-                `"${history.recovery_tips || ''}"`, // BARU
+                `"${history.recovery_tips || ''}"`,
                 `"${history.recommended_next_session || ''}"`,
-                `"${history.additional_notes || ''}"`,
                 history.created_at || '',
                 history.updated_at || ''
             ];

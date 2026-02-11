@@ -10,17 +10,19 @@ export interface CreateMedicalHistoryData {
     appointment_date: Date;
     staff_id?: number | null;
     service_type?: string | null;
-    area_concern?: string | null; // BARU
+    injury_type?: string | null; // BARU
+    area_concern?: string | null;
     diagnosis_result?: string | null;
+    expected_recovery_time?: string | null; // BARU
+    objective_progress?: string | null; // BARU
     pain_before?: number | null;
     pain_after?: number | null;
-    range_of_motion_impact?: string | null; // BARU
+    range_of_motion_impact?: string | null;
     treatments?: string | null;
     exercise?: string | null;
     homework?: string | null;
-    recovery_tips?: string | null; // BARU
+    recovery_tips?: string | null;
     recommended_next_session?: string | null;
-    additional_notes?: string | null;
     body_annotation?: string | null;
 }
 
@@ -28,17 +30,19 @@ export interface UpdateMedicalHistoryData {
     appointment_date?: Date;
     staff_id?: number | null;
     service_type?: string | null;
-    area_concern?: string | null; // BARU
+    injury_type?: string | null; // BARU
+    area_concern?: string | null;
     diagnosis_result?: string | null;
+    expected_recovery_time?: string | null; // BARU
+    objective_progress?: string | null; // BARU
     pain_before?: number | null;
     pain_after?: number | null;
-    range_of_motion_impact?: string | null; // BARU
+    range_of_motion_impact?: string | null;
     treatments?: string | null;
     exercise?: string | null;
     homework?: string | null;
-    recovery_tips?: string | null; // BARU
+    recovery_tips?: string | null;
     recommended_next_session?: string | null;
-    additional_notes?: string | null;
     body_annotation?: string | null;
 }
 
@@ -79,19 +83,21 @@ export function formatMedicalHistoryForTable(history: any) {
         staff_id: history.staff_id,
         staff_name: history.staff?.name || '-',
         service_type: history.service_type,
-        area_concern: history.area_concern, // BARU
+        injury_type: history.injury_type, // BARU
+        area_concern: history.area_concern,
         diagnosis_result: history.diagnosis_result,
+        expected_recovery_time: history.expected_recovery_time, // BARU
+        objective_progress: history.objective_progress, // BARU
         pain_before: history.pain_before,
         pain_after: history.pain_after,
         pain_reduction: history.pain_before && history.pain_after ? 
             history.pain_before - history.pain_after : null,
-        range_of_motion_impact: history.range_of_motion_impact, // BARU
+        range_of_motion_impact: history.range_of_motion_impact,
         treatments: history.treatments,
         exercise: history.exercise,
         homework: history.homework,
-        recovery_tips: history.recovery_tips, // BARU
+        recovery_tips: history.recovery_tips,
         recommended_next_session: history.recommended_next_session,
-        additional_notes: history.additional_notes,
         body_annotation: history.body_annotation,
         created_at: history.created_at,
         updated_at: history.updated_at
@@ -115,17 +121,19 @@ export function formatCreate(data: any): Prisma.medical_historyCreateInput {
     // Optional fields
     if (data.staff_id) formatted.staff = { connect: { id: data.staff_id } };
     if (data.service_type) formatted.service_type = data.service_type;
-    if (data.area_concern) formatted.area_concern = data.area_concern; // BARU
+    if (data.injury_type) formatted.injury_type = data.injury_type; // BARU
+    if (data.area_concern) formatted.area_concern = data.area_concern;
     if (data.diagnosis_result) formatted.diagnosis_result = data.diagnosis_result;
+    if (data.expected_recovery_time) formatted.expected_recovery_time = data.expected_recovery_time; // BARU
+    if (data.objective_progress) formatted.objective_progress = data.objective_progress; // BARU
     if (data.pain_before !== undefined) formatted.pain_before = data.pain_before;
     if (data.pain_after !== undefined) formatted.pain_after = data.pain_after;
-    if (data.range_of_motion_impact) formatted.range_of_motion_impact = data.range_of_motion_impact; // BARU
+    if (data.range_of_motion_impact) formatted.range_of_motion_impact = data.range_of_motion_impact;
     if (data.treatments) formatted.treatments = data.treatments;
     if (data.exercise) formatted.exercise = data.exercise;
     if (data.homework) formatted.homework = data.homework;
-    if (data.recovery_tips) formatted.recovery_tips = data.recovery_tips; // BARU
+    if (data.recovery_tips) formatted.recovery_tips = data.recovery_tips;
     if (data.recommended_next_session) formatted.recommended_next_session = data.recommended_next_session;
-    if (data.additional_notes) formatted.additional_notes = data.additional_notes;
     if (data.body_annotation) formatted.body_annotation = data.body_annotation;
 
     return formatted;
@@ -207,11 +215,13 @@ export async function getAll(options?: GetAllOptions): Promise<any[]> {
     if (options?.search) {
         where.OR = [
             { service_type: { contains: options.search } },
-            { area_concern: { contains: options.search } }, // BARU
+            { injury_type: { contains: options.search } }, // BARU
+            { area_concern: { contains: options.search } },
             { diagnosis_result: { contains: options.search } },
+            { objective_progress: { contains: options.search } }, // BARU
             { treatments: { contains: options.search } },
             { exercise: { contains: options.search } },
-            { recovery_tips: { contains: options.search } }, // BARU
+            { recovery_tips: { contains: options.search } },
             { patient: { name: { contains: options.search } } },
             { patient: { patient_code: { contains: options.search } } }
         ];
@@ -239,38 +249,31 @@ export async function getAll(options?: GetAllOptions): Promise<any[]> {
     if (options?.limit) queryOptions.take = options.limit;
     if (options?.offset) queryOptions.skip = options.offset;
 
-    if (options?.sortBy) {
-        const sortOrder = options.sortOrder || 'desc';
-        queryOptions.orderBy = { [options.sortBy]: sortOrder } as any;
-    }
-
     const results = await model.findMany(queryOptions);
     return results.map(formatMedicalHistoryForTable);
 }
 
 export async function update(id: number, data: UpdateMedicalHistoryData): Promise<any> {
-    const updateData: Prisma.medical_historyUpdateInput = {
-        updated_at: new Date()
-    };
+    const updateData: Prisma.medical_historyUpdateInput = {};
 
-    if (data.appointment_date !== undefined) {
-        updateData.appointment_date = new Date(data.appointment_date);
-    }
+    if (data.appointment_date !== undefined) updateData.appointment_date = new Date(data.appointment_date);
     if (data.staff_id !== undefined) {
         updateData.staff = data.staff_id ? { connect: { id: data.staff_id } } : { disconnect: true };
     }
     if (data.service_type !== undefined) updateData.service_type = data.service_type;
-    if (data.area_concern !== undefined) updateData.area_concern = data.area_concern; // BARU
+    if (data.injury_type !== undefined) updateData.injury_type = data.injury_type; // BARU
+    if (data.area_concern !== undefined) updateData.area_concern = data.area_concern;
     if (data.diagnosis_result !== undefined) updateData.diagnosis_result = data.diagnosis_result;
+    if (data.expected_recovery_time !== undefined) updateData.expected_recovery_time = data.expected_recovery_time; // BARU
+    if (data.objective_progress !== undefined) updateData.objective_progress = data.objective_progress; // BARU
     if (data.pain_before !== undefined) updateData.pain_before = data.pain_before;
     if (data.pain_after !== undefined) updateData.pain_after = data.pain_after;
-    if (data.range_of_motion_impact !== undefined) updateData.range_of_motion_impact = data.range_of_motion_impact; // BARU
+    if (data.range_of_motion_impact !== undefined) updateData.range_of_motion_impact = data.range_of_motion_impact;
     if (data.treatments !== undefined) updateData.treatments = data.treatments;
     if (data.exercise !== undefined) updateData.exercise = data.exercise;
     if (data.homework !== undefined) updateData.homework = data.homework;
-    if (data.recovery_tips !== undefined) updateData.recovery_tips = data.recovery_tips; // BARU
+    if (data.recovery_tips !== undefined) updateData.recovery_tips = data.recovery_tips;
     if (data.recommended_next_session !== undefined) updateData.recommended_next_session = data.recommended_next_session;
-    if (data.additional_notes !== undefined) updateData.additional_notes = data.additional_notes;
     if (data.body_annotation !== undefined) updateData.body_annotation = data.body_annotation;
 
     const result = await model.update({
@@ -374,10 +377,12 @@ export async function searchMedicalHistories(searchTerm: string): Promise<any[]>
         where: {
             OR: [
                 { service_type: { contains: searchTerm } },
-                { area_concern: { contains: searchTerm } }, // BARU
+                { injury_type: { contains: searchTerm } }, // BARU
+                { area_concern: { contains: searchTerm } },
                 { diagnosis_result: { contains: searchTerm } },
+                { objective_progress: { contains: searchTerm } }, // BARU
                 { treatments: { contains: searchTerm } },
-                { recovery_tips: { contains: searchTerm } }, // BARU
+                { recovery_tips: { contains: searchTerm } },
                 { patient: { name: { contains: searchTerm } } },
                 { patient: { patient_code: { contains: searchTerm } } },
                 { staff: { name: { contains: searchTerm } } }
