@@ -59,8 +59,11 @@ model medical_history {
   appointment_date         DateTime  @db.DateTime(0)
   staff_id                 Int?
   service_type             String?   @db.VarChar(100)
+  injury_type              String?   @db.VarChar(100)
   area_concern             String?   @db.VarChar(255)
   diagnosis_result         String?   @db.Text
+  expected_recovery_time   String?   @db.VarChar(100)
+  objective_progress       String?   @db.Text
   pain_before              Int?      @db.TinyInt
   pain_after               Int?      @db.TinyInt
   range_of_motion_impact   String?   @db.Text
@@ -69,7 +72,6 @@ model medical_history {
   homework                 String?   @db.Text
   recovery_tips            String?   @db.Text
   recommended_next_session String?   @db.VarChar(100)
-  additional_notes         String?   @db.Text
   body_annotation          String?   @db.Text
   created_at               DateTime? @default(now()) @db.Timestamp(0)
   updated_at               DateTime? @default(now()) @db.Timestamp(0)
