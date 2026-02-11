@@ -10,12 +10,15 @@ export interface CreateMedicalHistoryData {
     appointment_date: Date;
     staff_id?: number | null;
     service_type?: string | null;
+    area_concern?: string | null; // BARU
     diagnosis_result?: string | null;
     pain_before?: number | null;
     pain_after?: number | null;
+    range_of_motion_impact?: string | null; // BARU
     treatments?: string | null;
     exercise?: string | null;
     homework?: string | null;
+    recovery_tips?: string | null; // BARU
     recommended_next_session?: string | null;
     additional_notes?: string | null;
     body_annotation?: string | null;
@@ -25,12 +28,15 @@ export interface UpdateMedicalHistoryData {
     appointment_date?: Date;
     staff_id?: number | null;
     service_type?: string | null;
+    area_concern?: string | null; // BARU
     diagnosis_result?: string | null;
     pain_before?: number | null;
     pain_after?: number | null;
+    range_of_motion_impact?: string | null; // BARU
     treatments?: string | null;
     exercise?: string | null;
     homework?: string | null;
+    recovery_tips?: string | null; // BARU
     recommended_next_session?: string | null;
     additional_notes?: string | null;
     body_annotation?: string | null;
@@ -73,14 +79,17 @@ export function formatMedicalHistoryForTable(history: any) {
         staff_id: history.staff_id,
         staff_name: history.staff?.name || '-',
         service_type: history.service_type,
+        area_concern: history.area_concern, // BARU
         diagnosis_result: history.diagnosis_result,
         pain_before: history.pain_before,
         pain_after: history.pain_after,
         pain_reduction: history.pain_before && history.pain_after ? 
             history.pain_before - history.pain_after : null,
+        range_of_motion_impact: history.range_of_motion_impact, // BARU
         treatments: history.treatments,
         exercise: history.exercise,
         homework: history.homework,
+        recovery_tips: history.recovery_tips, // BARU
         recommended_next_session: history.recommended_next_session,
         additional_notes: history.additional_notes,
         body_annotation: history.body_annotation,
@@ -106,12 +115,15 @@ export function formatCreate(data: any): Prisma.medical_historyCreateInput {
     // Optional fields
     if (data.staff_id) formatted.staff = { connect: { id: data.staff_id } };
     if (data.service_type) formatted.service_type = data.service_type;
+    if (data.area_concern) formatted.area_concern = data.area_concern; // BARU
     if (data.diagnosis_result) formatted.diagnosis_result = data.diagnosis_result;
     if (data.pain_before !== undefined) formatted.pain_before = data.pain_before;
     if (data.pain_after !== undefined) formatted.pain_after = data.pain_after;
+    if (data.range_of_motion_impact) formatted.range_of_motion_impact = data.range_of_motion_impact; // BARU
     if (data.treatments) formatted.treatments = data.treatments;
     if (data.exercise) formatted.exercise = data.exercise;
     if (data.homework) formatted.homework = data.homework;
+    if (data.recovery_tips) formatted.recovery_tips = data.recovery_tips; // BARU
     if (data.recommended_next_session) formatted.recommended_next_session = data.recommended_next_session;
     if (data.additional_notes) formatted.additional_notes = data.additional_notes;
     if (data.body_annotation) formatted.body_annotation = data.body_annotation;
@@ -195,9 +207,11 @@ export async function getAll(options?: GetAllOptions): Promise<any[]> {
     if (options?.search) {
         where.OR = [
             { service_type: { contains: options.search } },
+            { area_concern: { contains: options.search } }, // BARU
             { diagnosis_result: { contains: options.search } },
             { treatments: { contains: options.search } },
             { exercise: { contains: options.search } },
+            { recovery_tips: { contains: options.search } }, // BARU
             { patient: { name: { contains: options.search } } },
             { patient: { patient_code: { contains: options.search } } }
         ];
@@ -246,12 +260,15 @@ export async function update(id: number, data: UpdateMedicalHistoryData): Promis
         updateData.staff = data.staff_id ? { connect: { id: data.staff_id } } : { disconnect: true };
     }
     if (data.service_type !== undefined) updateData.service_type = data.service_type;
+    if (data.area_concern !== undefined) updateData.area_concern = data.area_concern; // BARU
     if (data.diagnosis_result !== undefined) updateData.diagnosis_result = data.diagnosis_result;
     if (data.pain_before !== undefined) updateData.pain_before = data.pain_before;
     if (data.pain_after !== undefined) updateData.pain_after = data.pain_after;
+    if (data.range_of_motion_impact !== undefined) updateData.range_of_motion_impact = data.range_of_motion_impact; // BARU
     if (data.treatments !== undefined) updateData.treatments = data.treatments;
     if (data.exercise !== undefined) updateData.exercise = data.exercise;
     if (data.homework !== undefined) updateData.homework = data.homework;
+    if (data.recovery_tips !== undefined) updateData.recovery_tips = data.recovery_tips; // BARU
     if (data.recommended_next_session !== undefined) updateData.recommended_next_session = data.recommended_next_session;
     if (data.additional_notes !== undefined) updateData.additional_notes = data.additional_notes;
     if (data.body_annotation !== undefined) updateData.body_annotation = data.body_annotation;
@@ -357,8 +374,10 @@ export async function searchMedicalHistories(searchTerm: string): Promise<any[]>
         where: {
             OR: [
                 { service_type: { contains: searchTerm } },
+                { area_concern: { contains: searchTerm } }, // BARU
                 { diagnosis_result: { contains: searchTerm } },
                 { treatments: { contains: searchTerm } },
+                { recovery_tips: { contains: searchTerm } }, // BARU
                 { patient: { name: { contains: searchTerm } } },
                 { patient: { patient_code: { contains: searchTerm } } },
                 { staff: { name: { contains: searchTerm } } }

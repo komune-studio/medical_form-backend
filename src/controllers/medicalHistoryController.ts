@@ -255,7 +255,7 @@ export async function deleteMedicalHistory(req: Request, res: Response, next: Ne
         }
 
         await MedicalHistoryDAO.deleteMedicalHistory(id);
-        res.send({ 
+        res.send({
             http_code: 200,
             message: 'Medical history deleted successfully'
         });
@@ -418,21 +418,24 @@ export async function exportMedicalHistoriesToCSV(req: Request, res: Response, n
         res.setHeader('Content-Type', 'text/csv');
         res.setHeader('Content-Disposition', 'attachment; filename=medical_histories_export.csv');
 
-        // Create CSV content
+        // Create CSV content dengan field baru
         const headers = [
             'ID',
             'Patient Code',
             'Patient Name',
             'Appointment Date',
             'Service Type',
+            'Area Concern', // BARU
             'Staff Name',
             'Diagnosis Result',
             'Pain Before',
             'Pain After',
             'Pain Reduction',
+            'Range of Motion Impact', // BARU
             'Treatments',
             'Exercise',
             'Homework',
+            'Recovery Tips', // BARU
             'Next Session',
             'Additional Notes',
             'Created At',
@@ -450,14 +453,17 @@ export async function exportMedicalHistoriesToCSV(req: Request, res: Response, n
                 `"${history.patient_name || ''}"`,
                 history.appointment_date,
                 `"${history.service_type || ''}"`,
+                `"${history.area_concern || ''}"`, // BARU
                 `"${history.staff_name || ''}"`,
                 `"${history.diagnosis_result || ''}"`,
                 history.pain_before || '',
                 history.pain_after || '',
                 history.pain_reduction || '',
+                `"${history.range_of_motion_impact || ''}"`, // BARU
                 `"${history.treatments || ''}"`,
                 `"${history.exercise || ''}"`,
                 `"${history.homework || ''}"`,
+                `"${history.recovery_tips || ''}"`, // BARU
                 `"${history.recommended_next_session || ''}"`,
                 `"${history.additional_notes || ''}"`,
                 history.created_at || '',
