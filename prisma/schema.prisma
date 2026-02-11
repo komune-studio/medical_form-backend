@@ -59,12 +59,15 @@ model medical_history {
   appointment_date         DateTime  @db.DateTime(0)
   staff_id                 Int?
   service_type             String?   @db.VarChar(100)
+  area_concern             String?   @db.VarChar(255)
   diagnosis_result         String?   @db.Text
   pain_before              Int?      @db.TinyInt
   pain_after               Int?      @db.TinyInt
+  range_of_motion_impact   String?   @db.Text
   treatments               String?   @db.VarChar(255)
   exercise                 String?   @db.Text
   homework                 String?   @db.Text
+  recovery_tips            String?   @db.Text
   recommended_next_session String?   @db.VarChar(100)
   additional_notes         String?   @db.Text
   body_annotation          String?   @db.Text
