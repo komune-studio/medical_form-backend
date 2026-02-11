@@ -63,6 +63,7 @@ model medical_history {
   area_concern             String?   @db.VarChar(255)
   diagnosis_result         String?   @db.Text
   expected_recovery_time   String?   @db.VarChar(100)
+  recovery_goals           String?   @db.Text
   objective_progress       String?   @db.Text
   pain_before              Int?      @db.TinyInt
   pain_after               Int?      @db.TinyInt
