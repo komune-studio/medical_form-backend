@@ -23,7 +23,6 @@ export async function createStaff(req: Request, res: Response, next: NextFunctio
             return;
         }
 
-        // Validate phone number format
         if (body.phone_number) {
             const phoneRegex = /^[0-9+()-]+$/;
             if (!phoneRegex.test(body.phone_number)) {
@@ -31,7 +30,6 @@ export async function createStaff(req: Request, res: Response, next: NextFunctio
                 return;
             }
 
-            // Cek phone number unique
             const isUnique = await StaffDAO.isPhoneNumberUnique(body.phone_number);
             if (!isUnique) {
                 next(new BadRequestError('Phone number already exists'));
@@ -68,14 +66,21 @@ export async function getStaffById(req: Request, res: Response, next: NextFuncti
 
 export async function getAllStaff(req: Request, res: Response, next: NextFunction): Promise<void | Response> {
     try {
-        const { 
-            activeOnly = 'true', // default true
-            search 
-        } = req.query;
+        const { activeOnly, search } = req.query;
 
-        const options: StaffDAO.GetAllStaffOptions = {
-            activeOnly: activeOnly === 'true',
-        };
+        const options: StaffDAO.GetAllStaffOptions = {};
+
+        // Only set activeOnly if explicitly passed in query
+        // activeOnly=true  → only active
+        // activeOnly=false → only inactive
+        // not passed       → return ALL (null = no filter)
+        if (activeOnly === 'true') {
+            options.activeOnly = true;
+        } else if (activeOnly === 'false') {
+            options.activeOnly = false;
+        } else {
+            options.activeOnly = null; // fetch all, no filter
+        }
 
         if (search) {
             options.search = search as string;
@@ -108,7 +113,6 @@ export async function updateStaff(req: Request, res: Response, next: NextFunctio
             return;
         }
 
-        // Validate phone number jika diupdate
         if (body.phone_number) {
             const phoneRegex = /^[0-9+()-]+$/;
             if (!phoneRegex.test(body.phone_number)) {
@@ -116,7 +120,6 @@ export async function updateStaff(req: Request, res: Response, next: NextFunctio
                 return;
             }
 
-            // Cek phone number unique (kecuali untuk staff ini sendiri)
             const isUnique = await StaffDAO.isPhoneNumberUnique(body.phone_number, id);
             if (!isUnique) {
                 next(new BadRequestError('Phone number already exists'));
@@ -191,7 +194,6 @@ export async function bulkSearchStaff(req: Request, res: Response, next: NextFun
         const { query } = req.query;
         
         if (!query) {
-            // Return all active staff if no query
             const staff = await StaffDAO.getActiveStaff();
             res.send(staff);
             return;
@@ -228,7 +230,6 @@ export async function reactivateStaff(req: Request, res: Response, next: NextFun
     }
 }
 
-// NEW: Get staff by phone
 export async function getStaffByPhone(req: Request, res: Response, next: NextFunction): Promise<void | Response> {
     try {
         const { phone } = req.query;
@@ -238,14 +239,9 @@ export async function getStaffByPhone(req: Request, res: Response, next: NextFun
             return;
         }
 
-        console.log('Searching staff with phone:', phone); // DEBUG
-        
         const staff = await StaffDAO.getStaffByPhone(phone as string);
         
-        console.log('Found staff:', staff); // DEBUG
-        
         if (!staff) {
-            // Coba format lain
             const staffWithPlus = await StaffDAO.getStaffByPhone(`+${phone}`);
             if (staffWithPlus) {
                 return res.send(staffWithPlus);

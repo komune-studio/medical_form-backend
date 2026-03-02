@@ -6,7 +6,7 @@ const model = prisma.staff;
 
 export interface CreateStaffData {
     name: string;
-    phone_number: string;  // Wajib, karena di schema masih String?
+    phone_number: string;
     active?: boolean;
 }
 
@@ -17,7 +17,7 @@ export interface UpdateStaffData {
 }
 
 export interface GetAllStaffOptions {
-    activeOnly?: boolean;
+    activeOnly?: boolean | null; // null = fetch all (no filter)
     search?: string;
 }
 
@@ -59,9 +59,14 @@ export async function getById(id: Staff['id']): Promise<Staff | null> {
 export async function getAll(options?: GetAllStaffOptions): Promise<Staff[]> {
     const where: any = {};
 
-    if (options?.activeOnly !== false) { // default true
+    // Only apply active filter if activeOnly is explicitly true or false
+    // If activeOnly is null or undefined → fetch ALL (no filter)
+    if (options?.activeOnly === true) {
         where.active = true;
+    } else if (options?.activeOnly === false) {
+        where.active = false;
     }
+    // activeOnly === null or undefined → no active filter = return all
 
     if (options?.search) {
         where.OR = [
@@ -135,7 +140,6 @@ export async function getStaffByPhone(phone_number: string): Promise<Staff | nul
     });
 }
 
-// Validasi phone number unique
 export async function isPhoneNumberUnique(phone_number: string, excludeId?: number): Promise<boolean> {
     const where: any = { phone_number };
     
