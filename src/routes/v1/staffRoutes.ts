@@ -4,19 +4,17 @@ import auth from '../../middlewares/auth';
 
 const router = Router();
 
-// Public routes
-router.get('/active', controller.getActiveStaff);
-router.get('/search', controller.bulkSearchStaff);
-router.get('/by-phone', controller.getStaffByPhone); // HARUS SEBELUM /:id
-
-// Protected routes (require authentication)
-router.post('/create', auth.auth, controller.createStaff);
+// Both ADMIN & DOCTOR (read)
+router.get('/active', auth.auth, controller.getActiveStaff);
+router.get('/search', auth.auth, controller.bulkSearchStaff);
+router.get('/by-phone', auth.auth, controller.getStaffByPhone);
 router.get('/all', auth.auth, controller.getAllStaff);
-
-// GET BY ID harus di bawah route khusus
 router.get('/:id', auth.auth, controller.getStaffById);
-router.put('/:id', auth.auth, controller.updateStaff);
-router.delete('/:id', auth.auth, controller.deleteStaff);
-router.post('/:id/reactivate', auth.auth, controller.reactivateStaff);
+
+// ADMIN only (write)
+router.post('/create', auth.authAdmin, controller.createStaff);
+router.put('/:id', auth.authAdmin, controller.updateStaff);
+router.delete('/:id', auth.authAdmin, controller.deleteStaff);
+router.post('/:id/reactivate', auth.authAdmin, controller.reactivateStaff);
 
 export default router;

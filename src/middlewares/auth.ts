@@ -21,7 +21,7 @@ const processToken = async (req: Request, successCallback: Function, errorCallba
 
       try {
         const decoded = jwt.verify(token, <Secret>secret) as any;
-        
+
         const user = await UserDAO.getById(decoded.id);
         if (!user) {
           errorCallback({ msg: 'USER_NOT_FOUND' });
@@ -35,7 +35,7 @@ const processToken = async (req: Request, successCallback: Function, errorCallba
 
         decoded.user = user;
         req.decoded = decoded;
-        
+
         successCallback();
       } catch (err: any) {
         console.log(err);
@@ -51,7 +51,7 @@ const processToken = async (req: Request, successCallback: Function, errorCallba
   }
 };
 
-// Satu middleware untuk semua
+// Any authenticated user
 function auth(req: Request, res: Response, next: NextFunction) {
   processToken(
     req,
@@ -61,6 +61,46 @@ function auth(req: Request, res: Response, next: NextFunction) {
       } else {
         return next(new RequestError('Authentication required', 403, 'NO_AUTH_DATA'));
       }
+    },
+    (err: any) => {
+      return next(new RequestError('Authentication failed', 403, err.msg));
+    }
+  );
+}
+
+// ADMIN only
+function authAdmin(req: Request, res: Response, next: NextFunction) {
+  processToken(
+    req,
+    async () => {
+      if (req.decoded?.authenticated !== true) {
+        return next(new RequestError('Authentication required', 403, 'NO_AUTH_DATA'));
+      }
+      const role = req.decoded?.user?.role;
+      if (role !== 'ADMIN') {
+        return next(new RequestError('Admin access required', 403, 'FORBIDDEN'));
+      }
+      next();
+    },
+    (err: any) => {
+      return next(new RequestError('Authentication failed', 403, err.msg));
+    }
+  );
+}
+
+// ADMIN or DOCTOR
+function authAny(req: Request, res: Response, next: NextFunction) {
+  processToken(
+    req,
+    async () => {
+      if (req.decoded?.authenticated !== true) {
+        return next(new RequestError('Authentication required', 403, 'NO_AUTH_DATA'));
+      }
+      const role = req.decoded?.user?.role;
+      if (role !== 'ADMIN' && role !== 'DOCTOR') {
+        return next(new RequestError('Access denied', 403, 'FORBIDDEN'));
+      }
+      next();
     },
     (err: any) => {
       return next(new RequestError('Authentication failed', 403, err.msg));
@@ -94,14 +134,15 @@ function developer(req: Request, res: Response, next: NextFunction) {
   else return next(new RequestError('Invalid auth', 403, 'INVALID_AUTH'));
 }
 
-// Export semua sebagai alias ke auth (karena ga ada role sekarang)
 export default {
   auth,
-  admin: auth,
-  any: auth,
+  authAdmin,
+  authAny,
+  admin: authAdmin,        // alias backward compat
+  any: authAny,            // alias backward compat
   optional,
   developer,
-  superadmin: auth,
-  admin_superadmin: auth,
+  superadmin: authAdmin,
+  admin_superadmin: authAdmin,
   member: auth,
 };

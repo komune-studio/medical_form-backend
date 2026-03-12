@@ -1,5 +1,5 @@
 import { Mapped, OptionalKeys, RequiredKeys } from '../utils/types';
-import { users as User } from '@prisma/client';
+import { users as User, users_role } from '@prisma/client';
 import prisma from '../services/prisma';
 import hidash from '../utils/hidash';
 
@@ -14,6 +14,7 @@ export function getRequired() {
         username: '',
         password: '',
         salt: '',
+        role: 'DOCTOR',
     };
     return Object.keys(required);
 }
@@ -23,6 +24,7 @@ export function formatCreate(data: any) {
         username: data.username,
         password: data.password,
         salt: data.salt,
+        role: data.role ?? 'DOCTOR',
     };
 
     hidash.clean(formatted);
@@ -54,6 +56,13 @@ export async function getAllWithInactive() {
     });
 }
 
+export async function getByRole(role: users_role) {
+    return await model.findMany({
+        where: { active: true, role },
+        orderBy: { created_at: 'desc' }
+    });
+}
+
 export async function updatePassword(id: User['id'], password: string, salt: string) {
     return await model.update({
         where: { id },
@@ -70,6 +79,16 @@ export async function update(id: User['id'], data: Partial<User>) {
         where: { id },
         data: {
             ...data,
+            modified_at: new Date()
+        }
+    });
+}
+
+export async function updateRole(id: User['id'], role: users_role) {
+    return await model.update({
+        where: { id },
+        data: {
+            role,
             modified_at: new Date()
         }
     });
