@@ -19,6 +19,21 @@ declare module 'express-serve-static-core' {
     }
 }
 
+/**
+ * Strip password & salt, tapi KEEP active, role, id, username, timestamps.
+ * Dipakai untuk semua endpoint ADMIN agar field active & role tetap ada.
+ */
+function safeUser(u: any) {
+    return {
+        id: u.id,
+        username: u.username,
+        role: u.role,
+        active: u.active,
+        created_at: u.created_at,
+        modified_at: u.modified_at,
+    };
+}
+
 // ─────────────────────────────────────────────
 // PUBLIC
 // ─────────────────────────────────────────────
@@ -32,7 +47,7 @@ export async function createUser(req: Request, res: Response, next: NextFunction
         const password = crypto.generatePassword(body.password, salt);
         body.salt = salt;
         body.password = password;
-        body.role = 'DOCTOR'; // public register selalu DOCTOR
+        body.role = 'DOCTOR';
 
         const isMissingProperty = hidash.checkPropertyV2(body, 'User', UserDAO.getRequired());
         if (isMissingProperty.message) return next(isMissingProperty);
@@ -77,8 +92,8 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
             { expiresIn: '7d' }
         );
 
-        const userData = hidash.desensitizedFactory(user);
-        return res.json({ ...userData, token });
+        // Login response include role & active untuk frontend
+        return res.json({ ...safeUser(user), token });
     } catch (error: any) {
         return next(new InternalServerError(error.message));
     }
@@ -99,7 +114,7 @@ export async function getSelfData(req: Request, res: Response, next: NextFunctio
         const user = await UserDAO.getById(id);
         if (!user) return next(new EntityNotFoundError('User', id));
 
-        return res.send(hidash.desensitizedFactory(user));
+        return res.send(safeUser(user));
     } catch (error: any) {
         return next(new InternalServerError(error));
     }
@@ -130,7 +145,7 @@ export async function resetOwnPassword(req: Request, res: Response, next: NextFu
         const result = await UserDAO.updatePassword(userId, newHashedPassword, newSalt);
         return res.send({
             message: 'Password reset successfully',
-            user: hidash.desensitizedFactory(result),
+            user: safeUser(result),
         });
     } catch (error: any) {
         return next(new InternalServerError(error));
@@ -161,7 +176,7 @@ export async function updateOwnProfile(req: Request, res: Response, next: NextFu
         const result = await UserDAO.update(userId, { username });
         return res.send({
             message: 'Profile updated successfully',
-            user: hidash.desensitizedFactory(result),
+            user: safeUser(result),
         });
     } catch (error: any) {
         return next(new InternalServerError(error));
@@ -182,7 +197,7 @@ export async function deleteOwnAccount(req: Request, res: Response, next: NextFu
         const result = await UserDAO.softDelete(userId);
         return res.send({
             message: 'Account deleted successfully',
-            user: hidash.desensitizedFactory(result),
+            user: safeUser(result),
         });
     } catch (error: any) {
         return next(new InternalServerError(error));
@@ -196,7 +211,7 @@ export async function deleteOwnAccount(req: Request, res: Response, next: NextFu
 export async function getAllUsers(req: Request, res: Response, next: NextFunction) {
     try {
         const users = await UserDAO.getAll();
-        return res.send(users.map((u) => hidash.desensitizedFactory(u)));
+        return res.send(users.map(safeUser));
     } catch (error: any) {
         return next(new InternalServerError(error));
     }
@@ -205,7 +220,7 @@ export async function getAllUsers(req: Request, res: Response, next: NextFunctio
 export async function getAllUsersWithInactive(req: Request, res: Response, next: NextFunction) {
     try {
         const users = await UserDAO.getAllWithInactive();
-        return res.send(users.map((u) => hidash.desensitizedFactory(u)));
+        return res.send(users.map(safeUser));
     } catch (error: any) {
         return next(new InternalServerError(error));
     }
@@ -218,7 +233,7 @@ export async function getUsersByRole(req: Request, res: Response, next: NextFunc
             return next(new BadRequestError('role query param must be ADMIN or DOCTOR', 'INVALID_ROLE'));
         }
         const users = await UserDAO.getByRole(role as users_role);
-        return res.send(users.map((u) => hidash.desensitizedFactory(u)));
+        return res.send(users.map(safeUser));
     } catch (error: any) {
         return next(new InternalServerError(error));
     }
@@ -232,7 +247,7 @@ export async function getUserById(req: Request, res: Response, next: NextFunctio
         const user = await UserDAO.getById(id);
         if (!user) return next(new EntityNotFoundError('User', id));
 
-        return res.send(hidash.desensitizedFactory(user));
+        return res.send(safeUser(user));
     } catch (error: any) {
         return next(new InternalServerError(error));
     }
@@ -261,7 +276,7 @@ export async function adminCreateUser(req: Request, res: Response, next: NextFun
         }
 
         const result = await UserDAO.create(UserDAO.formatCreate(body));
-        return res.status(201).send(hidash.desensitizedFactory(result));
+        return res.status(201).send(safeUser(result));
     } catch (error: any) {
         return next(new InternalServerError(error));
     }
@@ -287,7 +302,7 @@ export async function adminUpdateUserRole(req: Request, res: Response, next: Nex
         const result = await UserDAO.updateRole(id, role as users_role);
         return res.send({
             message: `Role updated to ${role}`,
-            user: hidash.desensitizedFactory(result),
+            user: safeUser(result),
         });
     } catch (error: any) {
         return next(new InternalServerError(error));
@@ -311,7 +326,7 @@ export async function adminResetUserPassword(req: Request, res: Response, next: 
 
         return res.send({
             message: 'Password reset successfully',
-            user: hidash.desensitizedFactory(result),
+            user: safeUser(result),
         });
     } catch (error: any) {
         return next(new InternalServerError(error));
@@ -333,7 +348,7 @@ export async function adminDeleteUser(req: Request, res: Response, next: NextFun
         const result = await UserDAO.softDelete(id);
         return res.send({
             message: 'User deactivated successfully',
-            user: hidash.desensitizedFactory(result),
+            user: safeUser(result),
         });
     } catch (error: any) {
         return next(new InternalServerError(error));
@@ -351,7 +366,7 @@ export async function adminRestoreUser(req: Request, res: Response, next: NextFu
         const result = await UserDAO.restoreUser(id);
         return res.send({
             message: 'User restored successfully',
-            user: hidash.desensitizedFactory(result),
+            user: safeUser(result),
         });
     } catch (error: any) {
         return next(new InternalServerError(error));
