@@ -484,7 +484,7 @@ export async function exportMedicalHistoriesToCSV(req: Request, res: Response, n
     }
 }
 
-export async function getPatientProgressReport(req: Request, res: Response) {
+export async function getPatientProgressReport(req: Request, res: Response, next: NextFunction): Promise<void | Response> {
     try {
         const patientId = parseInt(req.params.patientId);
 
@@ -497,10 +497,25 @@ export async function getPatientProgressReport(req: Request, res: Response) {
 
         const report = await MedicalHistoryDAO.getPatientProgressReport(patientId);
 
-        if (!report.patient) {
-            return res.status(404).json({
-                http_code: 404,
-                error_message: 'No medical history found for this patient'
+        // Patient ID tidak ada sama sekali di database
+        if (report.patient === null && report.total_sessions === 0) {
+            // Cek apakah patient-nya memang ada
+            const patientExists = await MedicalHistoryDAO.validatePatientExists(patientId);
+            if (!patientExists) {
+                return res.status(404).json({
+                    http_code: 404,
+                    error_message: 'Patient not found'
+                });
+            }
+
+            // Patient ada tapi belum punya medical history → return 200 dengan sessions kosong
+            return res.status(200).json({
+                http_code: 200,
+                data: {
+                    patient: null,
+                    total_sessions: 0,
+                    sessions: []
+                }
             });
         }
 
