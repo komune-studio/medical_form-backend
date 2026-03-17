@@ -8,14 +8,14 @@ datasource db {
 }
 
 model users {
-  id          Int        @id @default(autoincrement())
-  username    String     @unique(map: "username") @db.VarChar(100)
-  password    String     @db.VarChar(255)
-  salt        String     @db.VarChar(255)
-  role        users_role @default(DOCTOR)
-  active      Boolean?   @default(true)
-  created_at  DateTime?  @default(now()) @db.Timestamp(0)
-  modified_at DateTime?  @db.Timestamp(0)
+  id          Int         @id @default(autoincrement())
+  username    String      @unique(map: "username") @db.VarChar(100)
+  password    String      @db.VarChar(255)
+  salt        String      @db.VarChar(255)
+  role        users_role? @default(THERAPIST)
+  active      Boolean?    @default(true)
+  created_at  DateTime?   @default(now()) @db.Timestamp(0)
+  modified_at DateTime?   @db.Timestamp(0)
   patient     patient[]
 
   @@index([username], map: "idx_users_username")
@@ -93,4 +93,5 @@ enum patient_gender {
 enum users_role {
   ADMIN
   DOCTOR
+  THERAPIST
 }
