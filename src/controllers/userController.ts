@@ -19,10 +19,6 @@ declare module 'express-serve-static-core' {
     }
 }
 
-/**
- * Strip password & salt, tapi KEEP active, role, id, username, timestamps.
- * Dipakai untuk semua endpoint ADMIN agar field active & role tetap ada.
- */
 function safeUser(u: any) {
     return {
         id: u.id,
@@ -47,7 +43,7 @@ export async function createUser(req: Request, res: Response, next: NextFunction
         const password = crypto.generatePassword(body.password, salt);
         body.salt = salt;
         body.password = password;
-        body.role = 'DOCTOR';
+        body.role = 'THERAPIST';
 
         const isMissingProperty = hidash.checkPropertyV2(body, 'User', UserDAO.getRequired());
         if (isMissingProperty.message) return next(isMissingProperty);
@@ -92,7 +88,6 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
             { expiresIn: '7d' }
         );
 
-        // Login response include role & active untuk frontend
         return res.json({ ...safeUser(user), token });
     } catch (error: any) {
         return next(new InternalServerError(error.message));
@@ -229,8 +224,8 @@ export async function getAllUsersWithInactive(req: Request, res: Response, next:
 export async function getUsersByRole(req: Request, res: Response, next: NextFunction) {
     try {
         const { role } = req.query;
-        if (!role || !['ADMIN', 'DOCTOR'].includes(role as string)) {
-            return next(new BadRequestError('role query param must be ADMIN or DOCTOR', 'INVALID_ROLE'));
+        if (!role || !['ADMIN', 'DOCTOR', 'THERAPIST'].includes(role as string)) {
+            return next(new BadRequestError('role query param must be ADMIN, DOCTOR, or THERAPIST', 'INVALID_ROLE'));
         }
         const users = await UserDAO.getByRole(role as users_role);
         return res.send(users.map(safeUser));
@@ -258,8 +253,8 @@ export async function adminCreateUser(req: Request, res: Response, next: NextFun
         const body = req.body;
         if (!body) return next(new MissingBodyError());
 
-        if (!body.role || !['ADMIN', 'DOCTOR'].includes(body.role)) {
-            return next(new BadRequestError('role must be ADMIN or DOCTOR', 'INVALID_ROLE'));
+        if (!body.role || !['ADMIN', 'DOCTOR', 'THERAPIST'].includes(body.role)) {
+            return next(new BadRequestError('role must be ADMIN, DOCTOR, or THERAPIST', 'INVALID_ROLE'));
         }
 
         const salt = crypto.generateSalt();
@@ -288,8 +283,8 @@ export async function adminUpdateUserRole(req: Request, res: Response, next: Nex
         if (isNaN(id)) return next(new BadParamIdError());
 
         const { role } = req.body;
-        if (!role || !['ADMIN', 'DOCTOR'].includes(role)) {
-            return next(new BadRequestError('role must be ADMIN or DOCTOR', 'INVALID_ROLE'));
+        if (!role || !['ADMIN', 'DOCTOR', 'THERAPIST'].includes(role)) {
+            return next(new BadRequestError('role must be ADMIN, DOCTOR, or THERAPIST', 'INVALID_ROLE'));
         }
 
         if (req.decoded?.id === id) {

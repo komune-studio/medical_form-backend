@@ -14,7 +14,6 @@ export function getRequired() {
         username: '',
         password: '',
         salt: '',
-        role: 'DOCTOR',
     };
     return Object.keys(required);
 }
@@ -24,7 +23,7 @@ export function formatCreate(data: any) {
         username: data.username,
         password: data.password,
         salt: data.salt,
-        role: data.role ?? 'DOCTOR',
+        role: data.role ?? 'THERAPIST',
     };
 
     hidash.clean(formatted);
