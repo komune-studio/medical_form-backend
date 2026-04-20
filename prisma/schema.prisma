@@ -17,18 +17,23 @@ model users {
   created_at  DateTime?   @default(now()) @db.Timestamp(0)
   modified_at DateTime?   @db.Timestamp(0)
   patient     patient[]
+  staff       staff?
 
   @@index([username], map: "idx_users_username")
 }
 
 model staff {
   id              Int               @id @default(autoincrement())
+  user_id         Int?              @unique(map: "user_id")
   name            String            @db.VarChar(100)
   phone_number    String?           @db.VarChar(20)
   active          Boolean?          @default(true)
   created_at      DateTime?         @default(now()) @db.Timestamp(0)
   modified_at     DateTime?         @db.Timestamp(0)
   medical_history medical_history[]
+  users           users?            @relation(fields: [user_id], references: [id], map: "fk_staff_user_id")
+
+  @@index([user_id], map: "idx_staff_user_id")
 }
 
 model patient {
