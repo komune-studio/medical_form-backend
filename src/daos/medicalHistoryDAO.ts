@@ -9,6 +9,7 @@ export interface CreateMedicalHistoryData {
     patient_id: number;
     appointment_date: Date;
     staff_id?: number | null;
+    user_id?: number | null;  // ← TAMBAH
     service_type?: string | null;
     injury_type?: string | null;
     area_concern?: string | null;
@@ -23,13 +24,14 @@ export interface CreateMedicalHistoryData {
     exercise?: string | null;
     homework?: string | null;
     recovery_tips?: string | null;
-    recommended_next_session?: Date | string | null; // ← DATE
+    recommended_next_session?: Date | string | null;
     body_annotation?: string | null;
 }
 
 export interface UpdateMedicalHistoryData {
     appointment_date?: Date;
     staff_id?: number | null;
+    user_id?: number | null;  // ← TAMBAH
     service_type?: string | null;
     injury_type?: string | null;
     area_concern?: string | null;
@@ -44,13 +46,14 @@ export interface UpdateMedicalHistoryData {
     exercise?: string | null;
     homework?: string | null;
     recovery_tips?: string | null;
-    recommended_next_session?: Date | string | null; // ← DATE
+    recommended_next_session?: Date | string | null;
     body_annotation?: string | null;
 }
 
 export interface GetAllOptions {
     patient_id?: number;
     staff_id?: number;
+    user_id?: number;  // ← TAMBAH
     service_type?: string;
     dateFrom?: Date;
     dateTo?: Date;
@@ -73,7 +76,6 @@ export interface MedicalHistoryStats {
     recentRecords: any[];
 }
 
-/** Helper: parse date string ke Date, return null jika invalid/kosong */
 function parseDateOrNull(value: any): Date | null {
     if (!value) return null;
     const d = new Date(value);
@@ -90,6 +92,8 @@ export function formatMedicalHistoryForTable(history: any) {
         appointment_date: history.appointment_date,
         staff_id: history.staff_id,
         staff_name: history.staff?.name || '-',
+        user_id: history.user_id,  // ← TAMBAH
+        user_name: history.users?.username || '-',  // ← TAMBAH
         service_type: history.service_type,
         injury_type: history.injury_type,
         area_concern: history.area_concern,
@@ -106,7 +110,7 @@ export function formatMedicalHistoryForTable(history: any) {
         exercise: history.exercise,
         homework: history.homework,
         recovery_tips: history.recovery_tips,
-        recommended_next_session: history.recommended_next_session, // DATE object
+        recommended_next_session: history.recommended_next_session,
         body_annotation: history.body_annotation,
         created_at: history.created_at,
         updated_at: history.updated_at
@@ -117,13 +121,15 @@ export function getRequired(): Array<keyof CreateMedicalHistoryData> {
     return ['patient_id', 'appointment_date'];
 }
 
-export function formatCreate(data: any): Prisma.medical_historyCreateInput {
-    const formatted: Prisma.medical_historyCreateInput = {
-        patient: { connect: { id: data.patient_id } },
+export function formatCreate(data: any): Prisma.medical_historyUncheckedCreateInput {
+    // ← pake UncheckedCreateInput, bukan CreateInput
+    const formatted: Prisma.medical_historyUncheckedCreateInput = {
+        patient_id: data.patient_id,  // ← langsung pake patient_id
         appointment_date: new Date(data.appointment_date)
     };
 
-    if (data.staff_id) formatted.staff = { connect: { id: data.staff_id } };
+    if (data.staff_id) formatted.staff_id = data.staff_id;  // ← langsung pake staff_id
+    if (data.user_id) formatted.user_id = data.user_id;      // ← langsung pake user_id
     if (data.service_type) formatted.service_type = data.service_type;
     if (data.injury_type) formatted.injury_type = data.injury_type;
     if (data.area_concern) formatted.area_concern = data.area_concern;
@@ -140,17 +146,16 @@ export function formatCreate(data: any): Prisma.medical_historyCreateInput {
     if (data.recovery_tips) formatted.recovery_tips = data.recovery_tips;
     if (data.body_annotation) formatted.body_annotation = data.body_annotation;
 
-    // ← Parse recommended_next_session sebagai DATE
     const nextSession = parseDateOrNull(data.recommended_next_session);
     if (nextSession) formatted.recommended_next_session = nextSession;
 
     return formatted;
 }
 
-export async function create(data: Prisma.medical_historyCreateInput): Promise<any> {
+export async function create(data: Prisma.medical_historyUncheckedCreateInput): Promise<any> {
     const result = await model.create({
         data,
-        include: { patient: true, staff: true }
+        include: { patient: true, staff: true, users: true }
     });
     return formatMedicalHistoryForTable(result);
 }
@@ -158,7 +163,7 @@ export async function create(data: Prisma.medical_historyCreateInput): Promise<a
 export async function getById(id: number): Promise<any | null> {
     const result = await model.findUnique({
         where: { id },
-        include: { patient: true, staff: true }
+        include: { patient: true, staff: true, users: true }
     });
     return formatMedicalHistoryForTable(result);
 }
@@ -171,10 +176,11 @@ export async function getByPatientId(patient_id: number, options?: GetAllOptions
     }
     if (options?.service_type) where.service_type = options.service_type;
     if (options?.staff_id) where.staff_id = options.staff_id;
+    if (options?.user_id) where.user_id = options.user_id;
 
     const queryOptions: Prisma.medical_historyFindManyArgs = {
         where,
-        include: { patient: true, staff: true },
+        include: { patient: true, staff: true, users: true },
         orderBy: { appointment_date: 'desc' }
     };
 
@@ -190,6 +196,7 @@ export async function getAll(options?: GetAllOptions): Promise<any[]> {
 
     if (options?.patient_id) where.patient_id = options.patient_id;
     if (options?.staff_id) where.staff_id = options.staff_id;
+    if (options?.user_id) where.user_id = options.user_id;
     if (options?.service_type) where.service_type = options.service_type;
 
     if (options?.search) {
@@ -204,7 +211,9 @@ export async function getAll(options?: GetAllOptions): Promise<any[]> {
             { exercise: { contains: options.search } },
             { recovery_tips: { contains: options.search } },
             { patient: { name: { contains: options.search } } },
-            { patient: { patient_code: { contains: options.search } } }
+            { patient: { patient_code: { contains: options.search } } },
+            { staff: { name: { contains: options.search } } },
+            { users: { username: { contains: options.search } } }
         ];
     }
 
@@ -214,7 +223,7 @@ export async function getAll(options?: GetAllOptions): Promise<any[]> {
 
     const queryOptions: Prisma.medical_historyFindManyArgs = {
         where,
-        include: { patient: true, staff: true },
+        include: { patient: true, staff: true, users: true },
         orderBy: [{ appointment_date: 'desc' }, { id: 'desc' }]
     };
 
@@ -226,12 +235,13 @@ export async function getAll(options?: GetAllOptions): Promise<any[]> {
 }
 
 export async function update(id: number, data: UpdateMedicalHistoryData): Promise<any> {
-    const updateData: Prisma.medical_historyUpdateInput = {};
+    const updateData: Prisma.medical_historyUncheckedUpdateInput = {
+        updated_at: new Date()
+    };
 
     if (data.appointment_date !== undefined) updateData.appointment_date = new Date(data.appointment_date);
-    if (data.staff_id !== undefined) {
-        updateData.staff = data.staff_id ? { connect: { id: data.staff_id } } : { disconnect: true };
-    }
+    if (data.staff_id !== undefined) updateData.staff_id = data.staff_id;
+    if (data.user_id !== undefined) updateData.user_id = data.user_id;
     if (data.service_type !== undefined) updateData.service_type = data.service_type;
     if (data.injury_type !== undefined) updateData.injury_type = data.injury_type;
     if (data.area_concern !== undefined) updateData.area_concern = data.area_concern;
@@ -248,7 +258,6 @@ export async function update(id: number, data: UpdateMedicalHistoryData): Promis
     if (data.recovery_tips !== undefined) updateData.recovery_tips = data.recovery_tips;
     if (data.body_annotation !== undefined) updateData.body_annotation = data.body_annotation;
 
-    // ← Parse recommended_next_session sebagai DATE
     if (data.recommended_next_session !== undefined) {
         const nextSession = parseDateOrNull(data.recommended_next_session);
         updateData.recommended_next_session = nextSession ?? null;
@@ -257,7 +266,7 @@ export async function update(id: number, data: UpdateMedicalHistoryData): Promis
     const result = await model.update({
         where: { id },
         data: updateData,
-        include: { patient: true, staff: true }
+        include: { patient: true, staff: true, users: true }
     });
 
     return formatMedicalHistoryForTable(result);
@@ -266,7 +275,7 @@ export async function update(id: number, data: UpdateMedicalHistoryData): Promis
 export async function deleteMedicalHistory(id: number): Promise<any> {
     return await model.delete({
         where: { id },
-        include: { patient: true, staff: true }
+        include: { patient: true, staff: true, users: true }
     });
 }
 
@@ -305,7 +314,7 @@ export async function getStats(dateFrom?: Date, dateTo?: Date): Promise<MedicalH
 
     const recentRecords = await model.findMany({
         where,
-        include: { patient: true, staff: true },
+        include: { patient: true, staff: true, users: true },
         take: 10,
         orderBy: { appointment_date: 'desc' }
     });
@@ -320,7 +329,7 @@ export async function getStats(dateFrom?: Date, dateTo?: Date): Promise<MedicalH
 
 export async function getRecentMedicalHistories(limit: number = 10): Promise<any[]> {
     const results = await model.findMany({
-        include: { patient: true, staff: true },
+        include: { patient: true, staff: true, users: true },
         take: limit,
         orderBy: { appointment_date: 'desc' }
     });
@@ -341,10 +350,11 @@ export async function searchMedicalHistories(searchTerm: string): Promise<any[]>
                 { recovery_tips: { contains: searchTerm } },
                 { patient: { name: { contains: searchTerm } } },
                 { patient: { patient_code: { contains: searchTerm } } },
-                { staff: { name: { contains: searchTerm } } }
+                { staff: { name: { contains: searchTerm } } },
+                { users: { username: { contains: searchTerm } } }
             ]
         },
-        include: { patient: true, staff: true },
+        include: { patient: true, staff: true, users: true },
         orderBy: { appointment_date: 'desc' },
         take: 50
     });
@@ -361,10 +371,15 @@ export async function validateStaffExists(staff_id: number): Promise<boolean> {
     return !!staff;
 }
 
+export async function validateUserExists(user_id: number): Promise<boolean> {
+    const user = await prisma.users.findUnique({ where: { id: user_id } });
+    return !!user;
+}
+
 export async function getByDateRange(startDate: Date, endDate: Date): Promise<any[]> {
     const results = await model.findMany({
         where: { appointment_date: { gte: startDate, lte: endDate } },
-        include: { patient: true, staff: true },
+        include: { patient: true, staff: true, users: true },
         orderBy: { appointment_date: 'asc' }
     });
     return results.map(formatMedicalHistoryForTable);
@@ -377,7 +392,7 @@ export async function getUpcomingAppointments(days: number = 7): Promise<any[]> 
 
     const results = await model.findMany({
         where: { appointment_date: { gte: today, lte: endDate } },
-        include: { patient: true, staff: true },
+        include: { patient: true, staff: true, users: true },
         orderBy: { appointment_date: 'asc' }
     });
     return results.map(formatMedicalHistoryForTable);
@@ -386,7 +401,7 @@ export async function getUpcomingAppointments(days: number = 7): Promise<any[]> 
 export async function getPatientProgressReport(patient_id: number): Promise<any> {
     const histories = await model.findMany({
         where: { patient_id },
-        include: { patient: true, staff: true },
+        include: { patient: true, staff: true, users: true },
         orderBy: { appointment_date: 'asc' }
     });
 

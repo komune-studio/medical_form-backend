@@ -5,6 +5,7 @@ import {
     EntityNotFoundError,
     InternalServerError,
     MissingBodyError,
+    UnauthorizedError,
 } from '../errors/RequestErrorCollection';
 import * as MedicalHistoryDAO from '../daos/medicalHistoryDAO';
 import hidash from '../utils/hidash';
@@ -30,13 +31,11 @@ export async function createMedicalHistory(req: Request, res: Response, next: Ne
             return;
         }
 
-        // Validasi staff exists jika ada
-        if (body.staff_id) {
-            const staffExists = await MedicalHistoryDAO.validateStaffExists(body.staff_id);
-            if (!staffExists) {
-                next(new BadRequestError('Staff not found'));
-                return;
-            }
+        // Ambil user_id dari token (user yang login)
+        const userId = req.decoded?.id;
+        if (!userId) {
+            next(new UnauthorizedError('User not authenticated'));
+            return;
         }
 
         // Validasi pain scale (1-10)
@@ -60,7 +59,6 @@ export async function createMedicalHistory(req: Request, res: Response, next: Ne
             const today = new Date();
             today.setHours(0, 0, 0, 0);
             
-            // Jika appointment date lebih dari 1 hari yang lalu, tolak
             const oneDayAgo = new Date(today);
             oneDayAgo.setDate(oneDayAgo.getDate() - 1);
             
@@ -70,7 +68,13 @@ export async function createMedicalHistory(req: Request, res: Response, next: Ne
             }
         }
 
-        const result = await MedicalHistoryDAO.create(MedicalHistoryDAO.formatCreate(body));
+        // Inject user_id dari token ke body
+        const createData = {
+            ...body,
+            user_id: parseInt(userId)
+        };
+
+        const result = await MedicalHistoryDAO.create(MedicalHistoryDAO.formatCreate(createData));
         res.send({
             http_code: 200,
             data: result,
@@ -113,7 +117,7 @@ export async function getMedicalHistoriesByPatient(req: Request, res: Response, 
             return;
         }
 
-        const { dateFrom, dateTo, service_type, staff_id } = req.query;
+        const { dateFrom, dateTo, service_type, staff_id, user_id } = req.query;
         
         const options: any = {};
         
@@ -121,6 +125,7 @@ export async function getMedicalHistoriesByPatient(req: Request, res: Response, 
         if (dateTo) options.dateTo = new Date(dateTo as string);
         if (service_type) options.service_type = service_type as string;
         if (staff_id) options.staff_id = parseInt(staff_id as string);
+        if (user_id) options.user_id = parseInt(user_id as string);
 
         const histories = await MedicalHistoryDAO.getByPatientId(patientId, options);
         
@@ -140,6 +145,7 @@ export async function getAllMedicalHistories(req: Request, res: Response, next: 
         const {
             patient_id,
             staff_id,
+            user_id,
             service_type,
             dateFrom,
             dateTo,
@@ -154,6 +160,7 @@ export async function getAllMedicalHistories(req: Request, res: Response, next: 
         
         if (patient_id) options.patient_id = parseInt(patient_id as string);
         if (staff_id) options.staff_id = parseInt(staff_id as string);
+        if (user_id) options.user_id = parseInt(user_id as string);
         if (service_type) options.service_type = service_type as string;
         if (dateFrom) options.dateFrom = new Date(dateFrom as string);
         if (dateTo) options.dateTo = new Date(dateTo as string);
@@ -210,6 +217,15 @@ export async function updateMedicalHistory(req: Request, res: Response, next: Ne
             const staffExists = await MedicalHistoryDAO.validateStaffExists(body.staff_id);
             if (!staffExists) {
                 next(new BadRequestError('Staff not found'));
+                return;
+            }
+        }
+
+        // Validasi user exists jika diupdate
+        if (body.user_id !== undefined && body.user_id !== null) {
+            const userExists = await MedicalHistoryDAO.validateUserExists(body.user_id);
+            if (!userExists) {
+                next(new BadRequestError('User not found'));
                 return;
             }
         }
@@ -379,25 +395,28 @@ export async function getByDateRange(req: Request, res: Response, next: NextFunc
     }
 }
 
-// Function untuk export CSV medical histories
 export async function exportMedicalHistoriesToCSV(req: Request, res: Response, next: NextFunction): Promise<void | Response> {
     try {
         const {
             patient_id,
             staff_id,
+            user_id,
             service_type,
             dateFrom,
             dateTo,
             search
         } = req.query;
 
-        const options: MedicalHistoryDAO.GetAllOptions = {};
+        const options: any = {};
 
         if (patient_id) {
             options.patient_id = parseInt(patient_id as string);
         }
         if (staff_id) {
             options.staff_id = parseInt(staff_id as string);
+        }
+        if (user_id) {
+            options.user_id = parseInt(user_id as string);
         }
         if (service_type) {
             options.service_type = service_type as string;
@@ -414,11 +433,9 @@ export async function exportMedicalHistoriesToCSV(req: Request, res: Response, n
 
         const histories = await MedicalHistoryDAO.getAll(options);
 
-        // Set headers for CSV download
         res.setHeader('Content-Type', 'text/csv');
         res.setHeader('Content-Disposition', 'attachment; filename=medical_histories_export.csv');
 
-        // Create CSV content dengan field baru
         const headers = [
             'ID',
             'Patient Code',
@@ -428,9 +445,10 @@ export async function exportMedicalHistoriesToCSV(req: Request, res: Response, n
             'Injury Type',
             'Area Concern',
             'Staff Name',
+            'User Name',
             'Diagnosis Result',
             'Expected Recovery Time',
-            'Recovery Goals', // BARU
+            'Recovery Goals',
             'Objective Progress',
             'Pain Before',
             'Pain After',
@@ -445,10 +463,8 @@ export async function exportMedicalHistoriesToCSV(req: Request, res: Response, n
             'Updated At'
         ];
 
-        // Write headers
         let csvContent = headers.join(',') + '\n';
 
-        // Write data rows
         histories.forEach((history: any) => {
             const row = [
                 history.id,
@@ -459,9 +475,10 @@ export async function exportMedicalHistoriesToCSV(req: Request, res: Response, n
                 `"${history.injury_type || ''}"`,
                 `"${history.area_concern || ''}"`,
                 `"${history.staff_name || ''}"`,
+                `"${history.user_name || ''}"`,
                 `"${history.diagnosis_result || ''}"`,
                 `"${history.expected_recovery_time || ''}"`,
-                `"${history.recovery_goals || ''}"`, // BARU
+                `"${history.recovery_goals || ''}"`,
                 `"${history.objective_progress || ''}"`,
                 history.pain_before || '',
                 history.pain_after || '',
@@ -497,9 +514,7 @@ export async function getPatientProgressReport(req: Request, res: Response, next
 
         const report = await MedicalHistoryDAO.getPatientProgressReport(patientId);
 
-        // Patient ID tidak ada sama sekali di database
         if (report.patient === null && report.total_sessions === 0) {
-            // Cek apakah patient-nya memang ada
             const patientExists = await MedicalHistoryDAO.validatePatientExists(patientId);
             if (!patientExists) {
                 return res.status(404).json({
@@ -508,7 +523,6 @@ export async function getPatientProgressReport(req: Request, res: Response, next
                 });
             }
 
-            // Patient ada tapi belum punya medical history → return 200 dengan sessions kosong
             return res.status(200).json({
                 http_code: 200,
                 data: {
