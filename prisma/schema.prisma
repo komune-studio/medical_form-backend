@@ -19,6 +19,8 @@ model users {
   medical_history medical_history[]
   patient         patient[]
   staff           staff?
+  treatment_log   treatment_log[]
+  treatment_plan  treatment_plan[]
 
   @@index([username], map: "idx_users_username")
 }
@@ -33,6 +35,7 @@ model staff {
   modified_at     DateTime?         @db.Timestamp(0)
   medical_history medical_history[]
   users           users?            @relation(fields: [user_id], references: [id], map: "fk_staff_user_id")
+  treatment_plan  treatment_plan[]
 
   @@index([user_id], map: "idx_staff_user_id")
 }
@@ -55,6 +58,7 @@ model patient {
   updated_at      DateTime?         @default(now()) @db.Timestamp(0)
   medical_history medical_history[]
   users           users?            @relation(fields: [created_by], references: [id], onUpdate: NoAction, map: "fk_patient_created_by")
+  treatment_plan  treatment_plan[]
 
   @@index([created_by], map: "fk_patient_created_by")
 }
@@ -94,6 +98,62 @@ model medical_history {
   @@index([user_id], map: "idx_user_id")
 }
 
+model treatment_log {
+  id                       Int            @id @default(autoincrement())
+  treatment_plan_id        Int
+  visit_date               DateTime       @db.DateTime(0)
+  objective_progress       String?        @db.Text
+  pain_before              Int?           @db.TinyInt
+  pain_after               Int?           @db.TinyInt
+  range_of_motion_impact   String?        @db.Text
+  treatment                String?        @db.Text
+  exercise                 String?        @db.Text
+  homework                 String?        @db.Text
+  recovery_tips            String?        @db.Text
+  recommended_next_session DateTime?      @db.Date
+  notes                    String?        @db.Text
+  created_by               Int?
+  created_at               DateTime?      @default(now()) @db.Timestamp(0)
+  updated_at               DateTime?      @default(now()) @db.Timestamp(0)
+  users                    users?         @relation(fields: [created_by], references: [id], onUpdate: NoAction, map: "fk_treatment_log_created_by")
+  treatment_plan           treatment_plan @relation(fields: [treatment_plan_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_treatment_log_plan")
+
+  @@index([created_by], map: "fk_treatment_log_created_by")
+  @@index([treatment_plan_id], map: "idx_treatment_log_plan")
+  @@index([visit_date], map: "idx_treatment_log_visit_date")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model treatment_plan {
+  id                     Int                   @id @default(autoincrement())
+  patient_id             Int
+  staff_id               Int?
+  user_id                Int?
+  title                  String                @db.VarChar(200)
+  service_type           String?               @db.VarChar(100)
+  injury_type            String?               @db.VarChar(100)
+  area_concern           String?               @db.VarChar(255)
+  diagnosis_result       String?               @db.Text
+  expected_recovery_time String?               @db.VarChar(100)
+  recovery_goals         String?               @db.Text
+  image_url              String?               @db.Text
+  status                 treatment_plan_status @default(ACTIVE)
+  started_at             DateTime              @db.Date
+  ended_at               DateTime?             @db.Date
+  created_at             DateTime?             @default(now()) @db.Timestamp(0)
+  updated_at             DateTime?             @default(now()) @db.Timestamp(0)
+  treatment_log          treatment_log[]
+  patient                patient               @relation(fields: [patient_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_treatment_plan_patient")
+  staff                  staff?                @relation(fields: [staff_id], references: [id], onUpdate: NoAction, map: "fk_treatment_plan_staff")
+  users                  users?                @relation(fields: [user_id], references: [id], onUpdate: NoAction, map: "fk_treatment_plan_user")
+
+  @@index([patient_id], map: "idx_treatment_plan_patient")
+  @@index([patient_id, status], map: "idx_treatment_plan_patient_status")
+  @@index([staff_id], map: "idx_treatment_plan_staff")
+  @@index([status], map: "idx_treatment_plan_status")
+  @@index([user_id], map: "idx_treatment_plan_user")
+}
+
 enum patient_gender {
   MALE
   FEMALE
@@ -103,4 +163,10 @@ enum users_role {
   ADMIN
   DOCTOR
   THERAPIST
+}
+
+enum treatment_plan_status {
+  ACTIVE
+  COMPLETED
+  CANCELLED
 }
