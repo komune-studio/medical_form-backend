@@ -94,6 +94,7 @@ export function formatMedicalHistoryForTable(history: any) {
         staff_name: history.staff?.name || '-',
         user_id: history.user_id,  // ← TAMBAH
         user_name: history.users?.username || '-',  // ← TAMBAH
+        user_role: history.users?.role || '-',
         service_type: history.service_type,
         injury_type: history.injury_type,
         area_concern: history.area_concern,
