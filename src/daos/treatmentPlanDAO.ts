@@ -65,6 +65,7 @@ export function formatForTable(plan: any) {
         staff_name: plan.staff?.name || '-',
         user_id: plan.user_id,
         user_name: plan.users?.username || '-',
+        user_role: plan.users?.role || '-',
         title: plan.title,
         service_type: plan.service_type,
         injury_type: plan.injury_type,
