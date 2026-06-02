@@ -7,6 +7,7 @@ const router = Router();
 // Both ADMIN & DOCTOR / THERAPIST
 router.post('/create', auth.auth, controller.createLog);
 router.get('/all', auth.auth, controller.getAllLogs);
+router.get('/follow-up', auth.auth, controller.getFollowUpLogs);
 router.get('/:id', auth.auth, controller.getLogById);
 router.put('/:id', auth.auth, controller.updateLog);
 

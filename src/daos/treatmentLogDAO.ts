@@ -60,6 +60,9 @@ export function formatForTable(log: any) {
         id: log.id,
         treatment_plan_id: log.treatment_plan_id,
         plan_title: log.treatment_plan?.title || '-',
+        patient_id: log.treatment_plan?.patient?.id,
+        patient_name: log.treatment_plan?.patient?.name || '-',
+        patient_code: log.treatment_plan?.patient?.patient_code || '-',
         staff_id: log.staff_id,
         staff_name: log.staff?.name || '-',
         user_id: log.user_id,
@@ -215,4 +218,119 @@ export async function deleteLog(id: number): Promise<any> {
             users_treatment_log_user_idTousers: true
         }
     });
+}
+
+export async function getFollowUpList(): Promise<any[]> {
+    // 1. Get active treatment plans with their latest log
+    const activePlans = await prisma.treatment_plan.findMany({
+        where: {
+            status: 'ACTIVE'
+        },
+        include: {
+            patient: true,
+            treatment_log: {
+                orderBy: {
+                    visit_date: 'desc'
+                },
+                take: 1,
+                include: {
+                    users_treatment_log_user_idTousers: true
+                }
+            }
+        }
+    });
+
+    const followUps: any[] = [];
+
+    for (const plan of activePlans) {
+        if (plan.treatment_log.length > 0) {
+            const latestLog = plan.treatment_log[0];
+            if (latestLog.recommended_next_session) {
+                followUps.push({
+                    type: 'TREATMENT_PLAN',
+                    id: latestLog.id,
+                    patient_id: plan.patient.id,
+                    patient_name: plan.patient.name,
+                    patient_code: plan.patient.patient_code,
+                    plan_id: plan.id,
+                    plan_title: plan.title,
+                    last_visit_date: latestLog.visit_date,
+                    recommended_next_session: latestLog.recommended_next_session,
+                    therapist_name: latestLog.users_treatment_log_user_idTousers?.username || '-',
+                    treatment: latestLog.treatment || '-',
+                    notes: latestLog.notes || latestLog.objective_progress || '-'
+                });
+            }
+        }
+    }
+
+    // 2. Standalone medical histories (latest for each patient)
+    const patients = await prisma.patient.findMany({
+        include: {
+            medical_history: {
+                orderBy: {
+                    appointment_date: 'desc'
+                },
+                take: 1,
+                include: {
+                    users: true
+                }
+            }
+        }
+    });
+
+    for (const patient of patients) {
+        if (patient.medical_history.length > 0) {
+            const latestHistory = patient.medical_history[0];
+            if (latestHistory.recommended_next_session) {
+                // If patient already has a more recent treatment log follow-up, check dates
+                const existingIndex = followUps.findIndex(f => f.patient_id === patient.id);
+                if (existingIndex !== -1) {
+                    const existingDate = new Date(followUps[existingIndex].recommended_next_session).getTime();
+                    const historyDate = new Date(latestHistory.recommended_next_session).getTime();
+                    // Keep the latest recommendation
+                    if (historyDate > existingDate) {
+                        followUps[existingIndex] = {
+                            type: 'MEDICAL_HISTORY',
+                            id: latestHistory.id,
+                            patient_id: patient.id,
+                            patient_name: patient.name,
+                            patient_code: patient.patient_code,
+                            plan_id: null,
+                            plan_title: 'Standalone Session',
+                            last_visit_date: latestHistory.appointment_date,
+                            recommended_next_session: latestHistory.recommended_next_session,
+                            therapist_name: latestHistory.users?.username || '-',
+                            treatment: latestHistory.treatments || '-',
+                            notes: latestHistory.diagnosis_result || latestHistory.objective_progress || '-'
+                        };
+                    }
+                } else {
+                    followUps.push({
+                        type: 'MEDICAL_HISTORY',
+                        id: latestHistory.id,
+                        patient_id: patient.id,
+                        patient_name: patient.name,
+                        patient_code: patient.patient_code,
+                        plan_id: null,
+                        plan_title: 'Standalone Session',
+                        last_visit_date: latestHistory.appointment_date,
+                        recommended_next_session: latestHistory.recommended_next_session,
+                        therapist_name: latestHistory.users?.username || '-',
+                        treatment: latestHistory.treatments || '-',
+                        notes: latestHistory.diagnosis_result || latestHistory.objective_progress || '-'
+                    });
+                }
+            }
+        }
+    }
+
+    // Sort by recommended_next_session ascending (nearest date first)
+    followUps.sort((a, b) => {
+        const dateA = new Date(a.recommended_next_session).getTime();
+        const dateB = new Date(b.recommended_next_session).getTime();
+        return dateA - dateB;
+    });
+
+    return followUps;
 }

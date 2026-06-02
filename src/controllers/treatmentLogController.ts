@@ -191,3 +191,17 @@ export async function deleteLog(req: Request, res: Response, next: NextFunction)
         next(new InternalServerError(error));
     }
 }
+
+export async function getFollowUpLogs(req: Request, res: Response, next: NextFunction): Promise<void | Response> {
+    try {
+        const followUps = await TreatmentLogDAO.getFollowUpList();
+        res.send({
+            http_code: 200,
+            data: followUps,
+            count: followUps.length,
+            message: 'Follow up sessions retrieved successfully'
+        });
+    } catch (error: any) {
+        next(new InternalServerError(error));
+    }
+}
