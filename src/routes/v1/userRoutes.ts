@@ -18,7 +18,7 @@ router.delete('/account', auth.auth, controller.deleteOwnAccount);
 router.post('/admin/create', auth.authAdmin, controller.adminCreateUser);          // buat user dgn role bebas
 router.get('/all', auth.authAdmin, controller.getAllUsers);
 router.get('/all-with-inactive', auth.authAdmin, controller.getAllUsersWithInactive);
-router.get('/by-role', auth.authAdmin, controller.getUsersByRole);                 // ?role=DOCTOR|ADMIN
+router.get('/by-role', auth.auth, controller.getUsersByRole);                 // ?role=DOCTOR|ADMIN
 router.get('/:id', auth.authAdmin, controller.getUserById);
 router.patch('/:id/role', auth.authAdmin, controller.adminUpdateUserRole);
 router.patch('/:id/reset-password', auth.authAdmin, controller.adminResetUserPassword);

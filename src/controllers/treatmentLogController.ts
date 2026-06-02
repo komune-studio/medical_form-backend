@@ -50,6 +50,7 @@ export async function createLog(req: Request, res: Response, next: NextFunction)
 
         const createData = {
             ...body,
+            user_id: body.user_id ? parseInt(body.user_id) : parseInt(userId),
             created_by: parseInt(userId) // The user making the request inputs the data
         };
 

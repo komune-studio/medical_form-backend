@@ -46,7 +46,7 @@ export async function createPlan(req: Request, res: Response, next: NextFunction
 
         const createData = {
             ...body,
-            user_id: parseInt(userId)
+            user_id: body.user_id ? parseInt(body.user_id) : parseInt(userId)
         };
 
         const result = await TreatmentPlanDAO.create(TreatmentPlanDAO.formatCreate(createData));

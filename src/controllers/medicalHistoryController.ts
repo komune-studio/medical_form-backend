@@ -68,10 +68,10 @@ export async function createMedicalHistory(req: Request, res: Response, next: Ne
             }
         }
 
-        // Inject user_id dari token ke body
+        // Inject user_id dari body jika dikirim, fallback ke token
         const createData = {
             ...body,
-            user_id: parseInt(userId)
+            user_id: body.user_id ? parseInt(body.user_id) : parseInt(userId)
         };
 
         const result = await MedicalHistoryDAO.create(MedicalHistoryDAO.formatCreate(createData));
