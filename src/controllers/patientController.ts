@@ -8,6 +8,8 @@ import {
 } from '../errors/RequestErrorCollection';
 import * as PatientDAO from '../daos/patientDAO';
 import hidash from '../utils/hidash';
+import jwt from 'jsonwebtoken';
+
 
 export async function createPatient(req: Request, res: Response, next: NextFunction): Promise<void | Response> {
     try {
@@ -598,6 +600,81 @@ export async function validatePhone(req: Request, res: Response, next: NextFunct
             valid: isUnique,
             message: isUnique ? 'Phone is available' : 'Phone already exists'
         });
+    } catch (error: any) {
+        next(new InternalServerError(error));
+    }
+}
+
+// import csv validation handling
+export async function importPatients(req: Request, res: Response, next: NextFunction): Promise<void | Response> {
+        try {
+        const patientsData = Array.isArray(req.body) 
+            ? req.body 
+            : (req.body.patientsData || req.body.patients);
+
+        if (!patientsData || !Array.isArray(patientsData) || patientsData.length === 0) {
+            next(new BadRequestError('Data pasien tidak boleh kosong'));
+            return;
+        }
+
+        const emailsToCheck = patientsData
+            .map((p: any) => p.email?.trim())
+            .filter((email: string) => email && email !== "");
+
+        const phonesToCheck = patientsData
+            .map((p: any) => String(p.phone_number || p.phone || "").trim())
+            .filter((phone: string) => phone && phone !== "");
+
+        const existingRecords = await PatientDAO.findExistingByEmailsOrPhones(emailsToCheck, phonesToCheck);
+
+        const existingEmailsSet = new Set(existingRecords.map(p => p.email?.toLowerCase()));
+        const existingPhonesSet = new Set(existingRecords.map(p => p.phone));
+
+        const validPatients: any[] = [];
+        const errorList: any[] = [];
+
+        for (const p of patientsData) {
+            const emailVal = p.email?.trim()?.toLowerCase();
+            const rawPhone = p.phone_number || p.phone || "";
+            const phoneVal = String(rawPhone).trim();
+
+            if (emailVal && existingEmailsSet.has(emailVal)) {
+                errorList.push({
+                    data: { patient_code: p.patient_code, fullname: p.fullname || p.name },
+                    error_message: `Email '${p.email}' sudah terdaftar di database`
+                });
+                continue;
+            }
+
+            if (phoneVal && existingPhonesSet.has(phoneVal)) {
+                errorList.push({
+                    data: { patient_code: p.patient_code, fullname: p.fullname || p.name },
+                    error_message: `Nomor HP '${phoneVal}' sudah terdaftar di database`
+                });
+                continue;
+            }
+            validPatients.push(p);
+        }
+
+        const authHeader = req.headers.authorization;
+        let userId: number | undefined;
+
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+            const token = authHeader.split(' ')[1];
+            const decoded: any = jwt.decode(token); 
+            userId = decoded?.id || decoded?.userId || decoded?.sub;
+        }
+
+
+        const insertedCount = await PatientDAO.createBatch(validPatients, userId);
+
+        res.send({
+            http_code: 200,
+            message: 'Proses import CSV selesai',
+            insertedCount,
+            errorList
+        });
+
     } catch (error: any) {
         next(new InternalServerError(error));
     }

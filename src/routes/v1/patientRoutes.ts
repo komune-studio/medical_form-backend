@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import * as controller from '../../controllers/patientController';
 import auth from '../../middlewares/auth';
+// import { uploadCSV } from '../../middlewares/uploadCSV';
 
 const router = Router();
 
@@ -17,6 +18,7 @@ router.get('/code', auth.auth, controller.getPatientByCode);
 router.get('/recent', auth.auth, controller.getRecentPatients);
 router.get('/:id', auth.auth, controller.getPatientById);
 router.put('/:id', auth.auth, controller.updatePatient);
+router.post('/batch', auth.authAdmin, controller.importPatients);
 
 // ADMIN only — delete & export
 router.delete('/:id', auth.authAdmin, controller.deletePatient);

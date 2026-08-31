@@ -13,18 +13,19 @@ import treatmentPlanRoutes from "./routes/v1/treatmentPlanRoutes";
 import treatmentLogRoutes from "./routes/v1/treatmentLogRoutes";
 
 const app: Express = express();
-
 const PORT = process.env.SERVER_PORT || 9876;
 
-app.get('/', (req, res) => res.send('Hello'));
+
+app.use(cors({
+  origin: ['http://localhost:3000', process.env.CLIENT_URL || ''].filter(Boolean), 
+  credentials: true
+}));
 
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json({ limit: '50mb' }));
-app.use(cors());
 app.use('/public', express.static('public'));
 app.use('/uploads', express.static('uploads/'));
-
-// Hanya menyisakan rute-rute yang diperlukan
+app.get('/', (req, res) => res.send('Hello'));
 app.use('/v1/user', userRoutes);
 app.use('/v1/upload', uploadRoutes);
 app.use('/v1/staff', staffRoutes);
@@ -33,7 +34,6 @@ app.use('/v1/medical-history', medicalHistoryRoutes);
 app.use('/v1/treatment-plan', treatmentPlanRoutes);
 app.use('/v1/treatment-log', treatmentLogRoutes);
 
-// Image proxy for CORS — fetches external image server-side
 app.get('/v1/image-proxy', (req, res) => {
   const imageUrl = req.query.url as string;
   if (!imageUrl) return res.status(400).send('Missing url param');
@@ -56,14 +56,15 @@ app.get('/v1/image-proxy', (req, res) => {
   }
 });
 
+
 app.use(errorMiddleware);
 
 async function main() {
-	await prisma.$connect();
-	console.log(`Successfully connected to database`);
-	app.listen(PORT, () => {
-		console.log(`Server ready at port ${PORT}`);
-	});
+  await prisma.$connect();
+  console.log(`Successfully connected to database`);
+  app.listen(PORT, () => {
+    console.log(`Server ready at port ${PORT}`);
+  });
 }
 
 main();

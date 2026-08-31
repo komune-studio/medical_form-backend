@@ -33,6 +33,8 @@ export interface UpdatePatientData {
     medical_notes?: string | null;
 }
 
+export type BulkCreatePatientData = Prisma.patientCreateManyInput;
+
 export interface GetAllOptions {
     search?: string;
     gender?: Prisma.patientCreateInput['gender'];
@@ -451,3 +453,84 @@ export async function validatePatientCodeUnique(patient_code: string, excludeId?
     const existing = await model.findFirst({ where });
     return !existing;
 }
+
+
+const parseCustomDate = (dateStr: any): Date | null => {
+  if (!dateStr) return null;
+  
+  if (!isNaN(Date.parse(dateStr))) {
+    return new Date(dateStr);
+  }
+
+  if (typeof dateStr === 'string') {
+    const parts = dateStr.split(/[\/-]/);
+    if (parts.length === 3) {
+      const day = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1;
+      const year = parseInt(parts[2], 10);
+      
+      const parsedDate = new Date(year, month, day);
+      if (!isNaN(parsedDate.getTime())) {
+        return parsedDate;
+      }
+    }
+  }
+
+  return null;
+};
+
+
+export const findExistingByEmailsOrPhones = async (emails: string[], phones: string[]) => {
+    if (emails.length === 0 && phones.length === 0) return [];
+
+    return await model.findMany({
+        where: {
+            OR: [
+                ...(emails.length > 0 ? [{ email: { in: emails } }] : []),
+                ...(phones.length > 0 ? [{ phone: { in: phones } }] : [])
+            ]
+        },
+        select: {
+            email: true,
+            phone: true
+        }
+    });
+};
+
+
+export const createBatch = async (patientsData: any[], userId?: number) => {
+    let insertedCount = 0;
+
+    for (const p of patientsData) {
+        const emailVal = p.email && p.email.trim() !== "" ? p.email.trim() : null;
+        const rawPhone = p.phone_number || p.phone || "";
+        const phoneVal = String(rawPhone).trim() || null;
+
+
+        const newPatient = await model.create({
+            data: {
+                patient_code: "TEMP",
+                name: p.fullname || p.name,
+                phone: phoneVal,
+                date_of_birth: parseCustomDate(p.dob || p.date_of_birth),
+                gender: p.gender,
+                height: p.height !== null && p.height !== undefined && p.height !== "" ? Number(p.height) : null,
+                weight: p.weight !== null && p.weight !== undefined && p.weight !== "" ? Number(p.weight) : null,
+                email: emailVal,
+                address: p.address || null,
+                allergies: p.allergies || null,
+                medical_notes: p.medical_notes || null,
+                created_by: userId || null
+            }
+        });
+
+        await model.update({
+            where: { id: newPatient.id },
+            data: { patient_code: `PAT-${newPatient.id}` }
+        });
+
+        insertedCount++;
+    }
+
+    return insertedCount;
+};
