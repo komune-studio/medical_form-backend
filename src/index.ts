@@ -17,7 +17,7 @@ const PORT = process.env.SERVER_PORT || 9876;
 
 
 app.use(cors({
-  origin: ['http://localhost:3000', process.env.CLIENT_URL || ''].filter(Boolean), 
+  origin: ['http://localhost:3000','https://rangka-medical-form.komunestudio.com', process.env.CLIENT_URL || ''].filter(Boolean), 
   credentials: true
 }));
 
