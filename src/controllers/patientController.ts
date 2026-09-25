@@ -605,11 +605,210 @@ export async function validatePhone(req: Request, res: Response, next: NextFunct
     }
 }
 
-// import csv validation handling
+interface BatchRowAnalysis {
+    index: number;
+    status: 'new' | 'edited' | 'unchanged';
+    errors: string[];
+    data: { patient_code: string | null; fullname: any; email: any; phone_number: string };
+}
+
+//Helper Normalisasi Nomor Telepon
+const normalizePhone = (rawPhone: any): string => {
+    if (!rawPhone) return '';
+    let phone = String(rawPhone).trim().replace(/[\s\-\(\)]/g, ''); // Hapus spasi, strip, tanda kurung
+
+    if (phone.startsWith('08')) {
+        return `+62${phone.slice(1)}`;
+    }
+    if (phone.startsWith('+')) {
+        return phone;
+    }
+    if (/^\d+$/.test(phone)) {
+        return `+${phone}`;
+    }
+    return phone;
+};
+
+//Helper Validasi E.164 (Format Internasional)
+const isValidPhone = (phone: string): boolean => {
+    if (!phone) return false;
+    return /^\+[1-9]\d{6,14}$/.test(phone);
+};
+
+async function analyzeBatchImport(patientsData: any[]): Promise<BatchRowAnalysis[]> {
+    const emailsToCheck = patientsData
+        .map((p: any) => p.email?.trim())
+        .filter((email: string) => email && email !== "");
+
+    // Normalize phone num before sending to DB
+    const phonesToCheck = patientsData
+        .map((p: any) => normalizePhone(p.phone_number || p.phone))
+        .filter((phone: string) => phone && phone !== "");
+
+    const codesToCheck = patientsData
+        .map((p: any) => (p.patient_code ? String(p.patient_code).trim() : null))
+        .filter((code: string | null): code is string => !!code);
+
+    const [existingByContact, existingByCode] = await Promise.all([
+        PatientDAO.findExistingByEmailsOrPhones(emailsToCheck, phonesToCheck),
+        PatientDAO.findExistingByPatientCodes(codesToCheck),
+    ]);
+
+    const emailMap = new Map<string, string>();
+    const phoneMap = new Map<string, string>();
+    existingByContact.forEach((rec: any) => {
+        if (rec.email) emailMap.set(rec.email.toLowerCase(), rec.patient_code);
+        
+        // save phon in map with normalize format
+        const ph = normalizePhone(rec.phone_number || rec.phone);
+        if (ph) phoneMap.set(ph, rec.patient_code);
+    });
+
+    const codeMap = new Map<string, any>();
+    existingByCode.forEach((rec: any) => {
+        codeMap.set(String(rec.patient_code).trim().toLowerCase(), rec);
+    });
+
+    const normalize = (v: any) => (v === null || v === undefined ? '' : String(v).trim());
+    const dateToYMD = (v: any) => {
+        if (!v) return '';
+        const d = new Date(v);
+        return isNaN(d.getTime()) ? normalize(v) : d.toISOString().split('T')[0];
+    };
+    const numOrNull = (v: any) => (v === null || v === undefined || v === '' ? null : Number(v));
+
+    const seenEmailsInBatch = new Map<string, number>();
+    const seenPhonesInBatch = new Map<string, number>();
+
+    return patientsData.map((p: any, index: number) => {
+        const errors: string[] = [];
+        const currentCode = p.patient_code ? String(p.patient_code).trim() : null;
+        const emailVal = p.email?.trim()?.toLowerCase();
+        
+        // normalizePhone untuk data CSV
+        const rawPhone = p.phone_number || p.phone || "";
+        const phoneVal = normalizePhone(rawPhone);
+        const fullname = p.fullname || p.name;
+
+        // Validasi Format Nomor Telepon
+        if (rawPhone && !isValidPhone(phoneVal)) {
+            errors.push(`Nomor HP '${rawPhone}' tidak valid (gunakan format internasional, misal: +628... atau +81...)`);
+        }
+
+        // Duplicate vs existing DB record belonging to a DIFFERENT patient
+        if (emailVal && emailMap.has(emailVal)) {
+            const ownerCode = emailMap.get(emailVal);
+            if (!currentCode || ownerCode !== currentCode) {
+                errors.push(`Email '${p.email}' sudah terdaftar pada pasien lain`);
+            }
+        }
+        if (phoneVal && phoneMap.has(phoneVal)) {
+            const ownerCode = phoneMap.get(phoneVal);
+            if (!currentCode || ownerCode !== currentCode) {
+                errors.push(`Nomor HP '${phoneVal}' sudah terdaftar pada pasien lain`);
+            }
+        }
+
+        // Duplicate within this same uploaded file
+        if (emailVal) {
+            if (seenEmailsInBatch.has(emailVal)) {
+                errors.push(`Email '${p.email}' duplikat dengan baris ${seenEmailsInBatch.get(emailVal)! + 1} di file yang sama`);
+            } else {
+                seenEmailsInBatch.set(emailVal, index);
+            }
+        }
+        if (phoneVal) {
+            if (seenPhonesInBatch.has(phoneVal)) {
+                errors.push(`Nomor HP '${phoneVal}' duplikat dengan baris ${seenPhonesInBatch.get(phoneVal)! + 1} di file yang sama`);
+            } else {
+                seenPhonesInBatch.set(phoneVal, index);
+            }
+        }
+
+        // Patient Code existence + full field diff
+        let status: 'new' | 'edited' | 'unchanged' = 'new';
+        if (currentCode) {
+            const existing = codeMap.get(currentCode.toLowerCase());
+            if (!existing) {
+                errors.push(`Patient Code '${currentCode}' tidak ditemukan di database`);
+            } else {
+                // Pastikan phone dari DB dan CSV sama-sama di-normalize saat di-compare
+                const fields: [any, any][] = [
+                    [normalize(fullname), normalize(existing.name)],
+                    [normalize(p.gender), normalize(existing.gender)],
+                    [phoneVal, normalizePhone(existing.phone_number || existing.phone)],
+                    [emailVal || '', normalize(existing.email).toLowerCase()],
+                ];
+                if (Object.prototype.hasOwnProperty.call(p, 'dob') || Object.prototype.hasOwnProperty.call(p, 'date_of_birth')) {
+                    fields.push([dateToYMD(p.dob || p.date_of_birth), dateToYMD(existing.date_of_birth)]);
+                }
+                if (Object.prototype.hasOwnProperty.call(p, 'address')) {
+                    fields.push([normalize(p.address), normalize(existing.address)]);
+                }
+                if (Object.prototype.hasOwnProperty.call(p, 'allergies')) {
+                    fields.push([normalize(p.allergies), normalize(existing.allergies)]);
+                }
+                if (Object.prototype.hasOwnProperty.call(p, 'medical_notes')) {
+                    fields.push([normalize(p.medical_notes), normalize(existing.medical_notes)]);
+                }
+                if (Object.prototype.hasOwnProperty.call(p, 'height')) {
+                    fields.push([numOrNull(p.height), existing.height != null ? Number(existing.height) : null]);
+                }
+                if (Object.prototype.hasOwnProperty.call(p, 'weight')) {
+                    fields.push([numOrNull(p.weight), existing.weight != null ? Number(existing.weight) : null]);
+                }
+                status = fields.some(([a, b]) => a !== b) ? 'edited' : 'unchanged';
+            }
+        }
+
+        // Pastikan p.phone_number yang di-pass ke validPatients/import adalah phoneVal yang sudah ter-normalize
+        p.phone_number = phoneVal;
+
+        return {
+            index,
+            status,
+            errors,
+            data: { patient_code: currentCode, fullname, email: p.email, phone_number: phoneVal }
+        };
+    });
+}
+
+// Preview read-only CSV
+export async function previewImportPatients(req: Request, res: Response, next: NextFunction): Promise<void | Response> {
+    try {
+        const patientsData = Array.isArray(req.body)
+            ? req.body
+            : (req.body.patientsData || req.body.patients);
+
+        if (!patientsData || !Array.isArray(patientsData)) {
+            next(new BadRequestError('Data pasien tidak boleh kosong'));
+            return;
+        }
+
+        const analysis = await analyzeBatchImport(patientsData);
+
+        const results = analysis.map((r) => ({
+            index: r.index,
+            status: r.errors.length > 0 ? 'error' : r.status,
+            errors: r.errors,
+            data: r.data,
+        }));
+
+        return res.status(200).json({
+            http_code: 200,
+            message: 'Preview completed',
+            results
+        });
+    } catch (error: any) {
+        next(new InternalServerError(error));
+    }
+}
+
+// Save CSV
 export async function importPatients(req: Request, res: Response, next: NextFunction): Promise<void | Response> {
-        try {
-        const patientsData = Array.isArray(req.body) 
-            ? req.body 
+    try {
+        const patientsData = Array.isArray(req.body)
+            ? req.body
             : (req.body.patientsData || req.body.patients);
 
         if (!patientsData || !Array.isArray(patientsData) || patientsData.length === 0) {
@@ -617,62 +816,31 @@ export async function importPatients(req: Request, res: Response, next: NextFunc
             return;
         }
 
-        const emailsToCheck = patientsData
-            .map((p: any) => p.email?.trim())
-            .filter((email: string) => email && email !== "");
+        const analysis = await analyzeBatchImport(patientsData);
 
-        const phonesToCheck = patientsData
-            .map((p: any) => String(p.phone_number || p.phone || "").trim())
-            .filter((phone: string) => phone && phone !== "");
-
-        const existingRecords = await PatientDAO.findExistingByEmailsOrPhones(emailsToCheck, phonesToCheck);
-
-        const existingEmailsSet = new Set(existingRecords.map(p => p.email?.toLowerCase()));
-        const existingPhonesSet = new Set(existingRecords.map(p => p.phone));
-
-        const validPatients: any[] = [];
         const errorList: any[] = [];
+        const validPatients: any[] = [];
 
-        for (const p of patientsData) {
-            const emailVal = p.email?.trim()?.toLowerCase();
-            const rawPhone = p.phone_number || p.phone || "";
-            const phoneVal = String(rawPhone).trim();
-
-            if (emailVal && existingEmailsSet.has(emailVal)) {
-                errorList.push({
-                    data: { patient_code: p.patient_code, fullname: p.fullname || p.name },
-                    error_message: `Email '${p.email}' sudah terdaftar di database`
+        analysis.forEach((r, i) => {
+            if (r.errors.length > 0) {
+                r.errors.forEach((msg) => {
+                    errorList.push({ data: r.data, error_message: msg });
                 });
-                continue;
+            } else {
+                validPatients.push(patientsData[i]);
             }
+        });
 
-            if (phoneVal && existingPhonesSet.has(phoneVal)) {
-                errorList.push({
-                    data: { patient_code: p.patient_code, fullname: p.fullname || p.name },
-                    error_message: `Nomor HP '${phoneVal}' sudah terdaftar di database`
-                });
-                continue;
-            }
-            validPatients.push(p);
-        }
+        const userId = (req as any).user?.id || (req as any).user?.userId;
 
-        const authHeader = req.headers.authorization;
-        let userId: number | undefined;
+        const result = await PatientDAO.createBatch(validPatients, userId);
 
-        if (authHeader && authHeader.startsWith('Bearer ')) {
-            const token = authHeader.split(' ')[1];
-            const decoded: any = jwt.decode(token); 
-            userId = decoded?.id || decoded?.userId || decoded?.sub;
-        }
-
-
-        const insertedCount = await PatientDAO.createBatch(validPatients, userId);
-
-        res.send({
+        return res.status(200).json({
             http_code: 200,
-            message: 'Proses import CSV selesai',
-            insertedCount,
-            errorList
+            message: 'Batch process completed',
+            insertedCount: result.insertedCount,
+            errorList: [...errorList, ...(result.errorList || [])],
+            successfulPatients: result.successfulPatients
         });
 
     } catch (error: any) {

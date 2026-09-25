@@ -46,15 +46,8 @@ export interface GetAllOptions {
 }
 
 // Helper untuk generate next patient code: PAT-1, PAT-2, etc
-async function generateNextPatientCode(): Promise<string> {
-    // Simple: selalu gunakan ID + 1
-    const lastPatient = await prisma.patient.findFirst({
-        orderBy: { id: 'desc' },
-        select: { id: true }
-    });
-    
-    const nextId = (lastPatient?.id || 0) + 1;
-    return `PAT-${nextId}`;
+function generateNextPatientCode(id: number): string {
+    return `PAT-${id}`;
 }
 
 export function formatPatientForTable(patient: any) {
@@ -140,19 +133,36 @@ export function formatCreate(data: any): Prisma.patientCreateInput {
 
     return formatted;
 }
-
 export async function create(data: Prisma.patientCreateInput): Promise<any> {
-    // Generate patient code jika kosong
-    if (!data.patient_code || data.patient_code.trim() === '') {
-        data.patient_code = await generateNextPatientCode();
-    }
+    const result = await prisma.$transaction(async (tx) => {
+        const needsGeneratedCode = !data.patient_code || data.patient_code.trim() === '';
 
-    const result = await model.create({ 
-        data,
-        include: {
-            users: true
+        // Create pasien ke database (gunakan kode sementara jika kosong)
+        const created = await tx.patient.create({ 
+            data: {
+                ...data,
+                patient_code: needsGeneratedCode ? `TEMP-${Date.now()}` : data.patient_code
+            },
+            include: {
+                users: true
+            }
+        });
+
+        // Jika patient_code tadinya kosong, update dengan ID asli dari DB
+        if (needsGeneratedCode) {
+            return await tx.patient.update({
+                where: { id: created.id },
+                data: {
+                    patient_code: `PAT-${created.id}` 
+                },
+                include: {
+                    users: true
+                }
+            });
         }
+        return created;
     });
+
     return formatPatientForTable(result);
 }
 
@@ -500,16 +510,16 @@ export const findExistingByEmailsOrPhones = async (emails: string[], phones: str
 
 export const createBatch = async (patientsData: any[], userId?: number) => {
     let insertedCount = 0;
+    const successfulPatients: any[] = [];
+    const errorList: any[] = [];
 
     for (const p of patientsData) {
-        const emailVal = p.email && p.email.trim() !== "" ? p.email.trim() : null;
-        const rawPhone = p.phone_number || p.phone || "";
-        const phoneVal = String(rawPhone).trim() || null;
+        try {
+            const emailVal = p.email && p.email.trim() !== "" ? p.email.trim() : null;
+            const rawPhone = p.phone_number || p.phone || "";
+            const phoneVal = String(rawPhone).trim() || null;
 
-
-        const newPatient = await model.create({
-            data: {
-                patient_code: "TEMP",
+            const dataPayload: any = {
                 name: p.fullname || p.name,
                 phone: phoneVal,
                 date_of_birth: parseCustomDate(p.dob || p.date_of_birth),
@@ -520,17 +530,76 @@ export const createBatch = async (patientsData: any[], userId?: number) => {
                 address: p.address || null,
                 allergies: p.allergies || null,
                 medical_notes: p.medical_notes || null,
-                created_by: userId || null
+            };
+
+            if (p.patient_code && p.patient_code !== "TEMP") {
+                const updated = await model.update({
+                    where: { patient_code: p.patient_code },
+                    data: {
+                        ...dataPayload
+                    }
+                });
+                successfulPatients.push(updated);
+            } else {
+                const tempCode = `TEMP-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+
+                const newPatient = await model.create({
+                    data: {
+                        ...dataPayload,
+                        patient_code: tempCode,
+                        created_by: userId || null
+                    }
+                });
+
+                const finalPatient = await model.update({
+                    where: { id: newPatient.id },
+                    data: { patient_code: `PAT-${newPatient.id}` }
+                });
+                successfulPatients.push(finalPatient);
             }
-        });
 
-        await model.update({
-            where: { id: newPatient.id },
-            data: { patient_code: `PAT-${newPatient.id}` }
-        });
+            insertedCount++;
+        } catch (err: any) {
+            let error_message = err.message;
+            if (err.code === 'P2002') {
+                const target = Array.isArray(err.meta?.target) ? err.meta.target.join(', ') : err.meta?.target;
+                error_message = `Duplicate ${target || 'value'} — already exists for another patient`;
+            }
 
-        insertedCount++;
+            errorList.push({
+                data: {
+                    fullname: p.fullname || p.name,
+                    patient_code: p.patient_code || null,
+                    email: p.email || null,
+                    phone_number: p.phone_number || p.phone || null,
+                },
+                error_message: `Fail to process patient ${p.fullname || p.name}: ${error_message}`
+            });
+        }
     }
-
-    return insertedCount;
+    return {
+        insertedCount,
+        errorList,
+        successfulPatients
+    };
 };
+
+export const getByPatientCodes = async (patientCodes: string[]) => {
+    if (!patientCodes || patientCodes.length === 0) return [];
+
+    return await model.findMany({
+        where: {
+            patient_code: {
+                in: patientCodes
+            }
+        }
+    });
+};
+
+export async function findExistingByPatientCodes(patientCodes: string[]): Promise<any[]> {
+    if (!patientCodes.length) return [];
+    const results = await model.findMany({
+        where: { patient_code: { in: patientCodes } }
+    });
+    return results; 
+}

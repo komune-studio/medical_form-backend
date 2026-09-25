@@ -19,6 +19,7 @@ router.get('/recent', auth.auth, controller.getRecentPatients);
 router.get('/:id', auth.auth, controller.getPatientById);
 router.put('/:id', auth.auth, controller.updatePatient);
 router.post('/batch', auth.authAdmin, controller.importPatients);
+router.post('/batch/preview', auth.authAdmin, controller.previewImportPatients);
 
 // ADMIN only — delete & export
 router.delete('/:id', auth.authAdmin, controller.deletePatient);
