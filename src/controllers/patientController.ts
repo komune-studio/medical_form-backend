@@ -607,7 +607,7 @@ export async function validatePhone(req: Request, res: Response, next: NextFunct
 
 interface BatchRowAnalysis {
     index: number;
-    status: 'new' | 'edited' | 'unchanged';
+    status: 'new' | 'edited';
     errors: string[];
     data: { patient_code: string | null; fullname: any; email: any; phone_number: string };
 }
@@ -615,7 +615,7 @@ interface BatchRowAnalysis {
 //Helper Normalisasi Nomor Telepon
 const normalizePhone = (rawPhone: any): string => {
     if (!rawPhone) return '';
-    let phone = String(rawPhone).trim().replace(/[\s\-\(\)]/g, ''); // Hapus spasi, strip, tanda kurung
+    let phone = String(rawPhone).trim().replace(/[\s\-\(\)]/g, '');
 
     if (phone.startsWith('08')) {
         return `+62${phone.slice(1)}`;
@@ -669,14 +669,6 @@ async function analyzeBatchImport(patientsData: any[]): Promise<BatchRowAnalysis
         codeMap.set(String(rec.patient_code).trim().toLowerCase(), rec);
     });
 
-    const normalize = (v: any) => (v === null || v === undefined ? '' : String(v).trim());
-    const dateToYMD = (v: any) => {
-        if (!v) return '';
-        const d = new Date(v);
-        return isNaN(d.getTime()) ? normalize(v) : d.toISOString().split('T')[0];
-    };
-    const numOrNull = (v: any) => (v === null || v === undefined || v === '' ? null : Number(v));
-
     const seenEmailsInBatch = new Map<string, number>();
     const seenPhonesInBatch = new Map<string, number>();
 
@@ -685,12 +677,12 @@ async function analyzeBatchImport(patientsData: any[]): Promise<BatchRowAnalysis
         const currentCode = p.patient_code ? String(p.patient_code).trim() : null;
         const emailVal = p.email?.trim()?.toLowerCase();
         
-        // normalizePhone untuk data CSV
+        // normalizePhone for data CSV
         const rawPhone = p.phone_number || p.phone || "";
         const phoneVal = normalizePhone(rawPhone);
         const fullname = p.fullname || p.name;
 
-        // Validasi Format Nomor Telepon
+        // phone format validation
         if (rawPhone && !isValidPhone(phoneVal)) {
             errors.push(`Nomor HP '${rawPhone}' tidak valid (gunakan format internasional, misal: +628... atau +81...)`);
         }
@@ -725,43 +717,16 @@ async function analyzeBatchImport(patientsData: any[]): Promise<BatchRowAnalysis
             }
         }
 
-        // Patient Code existence + full field diff
-        let status: 'new' | 'edited' | 'unchanged' = 'new';
+        let status: 'new' | 'edited' = 'new';
         if (currentCode) {
             const existing = codeMap.get(currentCode.toLowerCase());
             if (!existing) {
                 errors.push(`Patient Code '${currentCode}' tidak ditemukan di database`);
             } else {
-                // Pastikan phone dari DB dan CSV sama-sama di-normalize saat di-compare
-                const fields: [any, any][] = [
-                    [normalize(fullname), normalize(existing.name)],
-                    [normalize(p.gender), normalize(existing.gender)],
-                    [phoneVal, normalizePhone(existing.phone_number || existing.phone)],
-                    [emailVal || '', normalize(existing.email).toLowerCase()],
-                ];
-                if (Object.prototype.hasOwnProperty.call(p, 'dob') || Object.prototype.hasOwnProperty.call(p, 'date_of_birth')) {
-                    fields.push([dateToYMD(p.dob || p.date_of_birth), dateToYMD(existing.date_of_birth)]);
-                }
-                if (Object.prototype.hasOwnProperty.call(p, 'address')) {
-                    fields.push([normalize(p.address), normalize(existing.address)]);
-                }
-                if (Object.prototype.hasOwnProperty.call(p, 'allergies')) {
-                    fields.push([normalize(p.allergies), normalize(existing.allergies)]);
-                }
-                if (Object.prototype.hasOwnProperty.call(p, 'medical_notes')) {
-                    fields.push([normalize(p.medical_notes), normalize(existing.medical_notes)]);
-                }
-                if (Object.prototype.hasOwnProperty.call(p, 'height')) {
-                    fields.push([numOrNull(p.height), existing.height != null ? Number(existing.height) : null]);
-                }
-                if (Object.prototype.hasOwnProperty.call(p, 'weight')) {
-                    fields.push([numOrNull(p.weight), existing.weight != null ? Number(existing.weight) : null]);
-                }
-                status = fields.some(([a, b]) => a !== b) ? 'edited' : 'unchanged';
+                status = 'edited';
             }
         }
 
-        // Pastikan p.phone_number yang di-pass ke validPatients/import adalah phoneVal yang sudah ter-normalize
         p.phone_number = phoneVal;
 
         return {
